@@ -24,8 +24,14 @@ public class HeapMemory {
     }
 
     public void printHeap() {
-        for (int i = 0; i < 20; i++) {//vinte para teste
+        for (int i = 0; i < sizeInInt; i++) {//vinte para teste
             System.out.println("index: " + i + " | ID da variavel(0 se nao houver): " + memory[i]);
+        }
+    }
+
+    public void freeHeap(int requestSizeInt, int requestStartAddress){
+        for (int i = 0; i < requestSizeInt; i++) {
+            memory[requestStartAddress + i] = 0;
         }
     }
 

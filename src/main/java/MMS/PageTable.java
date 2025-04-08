@@ -2,12 +2,15 @@ package MMS;
 
 public class PageTable {
     private PageTableEntry[] entries;//index (página virtual) -> value (frame físico)
-    private final int pageSizeKB;
+    private final int pageSizeB;
     private final int numPages;
+    private int pageSizeInt;
 
-    public PageTable(int heapSizeKB, int pageSizeKB) {
-        this.pageSizeKB = pageSizeKB;
-        this.numPages = heapSizeKB / pageSizeKB;
+
+    public PageTable(int heapSizeKB, int pageSizeB) {
+        this.pageSizeB = pageSizeB;
+        this.pageSizeInt = pageSizeB / 4;
+        this.numPages = (heapSizeKB * 1024) / pageSizeB;
         this.entries = new PageTableEntry[numPages];
         initializeEntries();
     }
@@ -18,7 +21,7 @@ public class PageTable {
     }
 
     public void unmap(int virtualPage) {
-        entries[virtualPage] = null;
+        entries[virtualPage].setPhysicalFrame(-1);
     }
 
     public boolean isMapped(int virtualPage) {
@@ -36,8 +39,8 @@ public class PageTable {
         }
     }
 
-    public int getPageSizeKB() {
-        return pageSizeKB;
+    public int getPageSizeB() {
+        return pageSizeB;
     }
 
     public void printPageTable() {
@@ -45,4 +48,9 @@ public class PageTable {
             System.out.println("index(page): " + i + " value(frame/-1 se nao mapeado): " + entries[i].getPhysicalFrame());
         }
     }
+
+    public int getPageSizeInt(){
+        return pageSizeInt;
+    }
+
 }

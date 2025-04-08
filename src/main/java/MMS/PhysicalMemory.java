@@ -2,12 +2,12 @@ package MMS;
 
 public class PhysicalMemory {
     private Frame[] frames;
-    private final int frameSize;
+    private final int frameSizeB;
     private final int numFrames;
 
-    public PhysicalMemory(int totalMemorySize, int frameSize) {//heap e page
-        this.numFrames = totalMemorySize / frameSize;
-        this.frameSize = frameSize;
+    public PhysicalMemory(int heapMemorySizeKB, int frameSizeB) {//heap e page
+        this.numFrames = (heapMemorySizeKB * 1024) / frameSizeB;
+        this.frameSizeB = frameSizeB;
         this.frames = new Frame[numFrames];
         initializeFrames();
     }
