@@ -4,13 +4,13 @@ public class Request {
     private final int variableId;
     private final int startAddress;
     private final int sizeB;
-    private final int timestamp;
+    private final long timestamp;
 
-    public Request(int variableId, int startAddress, int sizeB, int timestamp) {
+    public Request(int variableId, int startAddress, int sizeB) {
         this.variableId = variableId;
         this.startAddress = startAddress;
         this.sizeB = sizeB;
-        this.timestamp = timestamp;
+        this.timestamp = System.nanoTime();
     }
 
     public int getVariableId() {
@@ -23,6 +23,10 @@ public class Request {
 
     public int getRequestSizeB() {
         return sizeB;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
     }
 
 }
