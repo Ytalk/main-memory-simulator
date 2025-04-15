@@ -6,13 +6,18 @@ public class PageTable {
     private final int numPages;
     private int pageSizeInt;
 
-
     public PageTable(int heapSizeKB, int pageSizeB) {
         this.pageSizeB = pageSizeB;
         this.pageSizeInt = pageSizeB / 4;
         this.numPages = (heapSizeKB * 1024) / pageSizeB;
         this.entries = new PageTableEntry[numPages];
         initializeEntries();
+    }
+
+    private void initializeEntries() {
+        for (int i = 0; i < numPages; i++) {
+            entries[i] = new PageTableEntry(-1);//-1 = não mapeado
+        }
     }
 
     //mapeia - página -> frame
@@ -25,7 +30,7 @@ public class PageTable {
     }
 
     public boolean isMapped(int virtualPage) {
-        return entries[virtualPage] != null;
+        return entries[virtualPage].getPhysicalFrame() != -1;
     }
 
     //retorna o frame associado com a página
@@ -33,24 +38,22 @@ public class PageTable {
         return entries[virtualPage].getPhysicalFrame();
     }
 
-    private void initializeEntries() {
-        for (int i = 0; i < numPages; i++) {
-            entries[i] = new PageTableEntry(-1);//-1 = não mapeado
-        }
-    }
-
     public int getPageSizeB() {
         return pageSizeB;
+    }
+
+    public int getPageSizeInt(){
+        return pageSizeInt;
+    }
+
+    public int getNumPages(){
+        return numPages;
     }
 
     public void printPageTable() {
         for (int i = 0; i < numPages; i++) {
             System.out.println("index(page): " + i + " value(frame/-1 se nao mapeado): " + entries[i].getPhysicalFrame());
         }
-    }
-
-    public int getPageSizeInt(){
-        return pageSizeInt;
     }
 
 }

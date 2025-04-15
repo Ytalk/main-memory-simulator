@@ -2,14 +2,16 @@ package MMS;
 
 public class Request {
     private final int variableId;
-    private final int startAddress;
+    private final int firstVirtualPage;
     private final int sizeB;
+    private final int pagesAllocated;
     private final long timestamp;
 
-    public Request(int variableId, int startAddress, int sizeB) {
+    public Request(int variableId, int firstVirtualPage, int pagesAllocated, int sizeB) {
         this.variableId = variableId;
-        this.startAddress = startAddress;
+        this.firstVirtualPage = firstVirtualPage;
         this.sizeB = sizeB;
+        this.pagesAllocated = pagesAllocated;
         this.timestamp = System.nanoTime();
     }
 
@@ -17,8 +19,8 @@ public class Request {
         return variableId;
     }
 
-    public int getStartAddress() {
-        return startAddress;
+    public int getFirstVirtualPage() {
+        return firstVirtualPage;
     }
 
     public int getRequestSizeB() {
@@ -27,6 +29,10 @@ public class Request {
 
     public long getTimestamp() {
         return timestamp;
+    }
+
+    public int getPagesAllocated(){
+        return pagesAllocated;
     }
 
 }
