@@ -6,15 +6,15 @@ import java.util.List;
 public class PhysicalMemory {
     private Frame[] frames;
     private final int frameSizeB;
+    private final int frameSizeInt;
     private final int numFrames;
 
     private int[] heap;
-    private int heapSizeKB;
-    private int heapSizeInt;
-    private int pageSizeInt;
-    private int heapSizeB;
+    private final int heapSizeKB;
+    private final int heapSizeB;
+    private final int heapSizeInt;
+
     private int nextFreeAddress;
-    private int frameSizeInt;
 
     public PhysicalMemory(int heapSizeKB, int frameSizeB) {//heap e page
         this.heapSizeKB = heapSizeKB;

@@ -9,18 +9,17 @@ public class MemoryManager {
     private PhysicalMemory physicalMemory;
     private PageTable pageTable;
     private Queue<Request> requestQueue;
-    private int requestCounter;
 
     private MemoryManager(int heapSizeKB, int pageSizeB) {
         this.physicalMemory = new PhysicalMemory(heapSizeKB, pageSizeB);
         this.pageTable = new PageTable(heapSizeKB, pageSizeB);
         this.requestQueue = new LinkedList<>();
-        this.requestCounter = 0;
     }
 
 
-    private void allocateVariable(int variableId, int sizeBytes) {
-        int sizeInt = sizeBytes / 4;
+    private void allocateVariable(Request request) {
+        System.out.println( request.getSizeB() );
+        int sizeInt = request.getSizeB() / 4;
         int pagesNeeded = (int) Math.ceil((double) sizeInt / pageTable.getPageSizeInt());
         System.out.println("precisara da seguinte quantidade de paginas para alocar: " + pagesNeeded);
 
@@ -56,12 +55,14 @@ public class MemoryManager {
         for (int i = 0; i < pagesNeeded; i++) {
             int write = Math.min(remaining, pageTable.getPageSizeInt());//fragmentará ou preencherá a page
             for (int j = 0; j < write; j++) {
-                physicalMemory.writeHeap(allocatedFrames[i], j, variableId);
+                physicalMemory.writeHeap(allocatedFrames[i], j, request.getVariableId());
             }
             remaining -= write;//subtrai size até ele zerar (como última page ou fragmentação interna)
         }
 
-        requestQueue.add( new Request(variableId, firstVirtualPage, pagesNeeded, sizeBytes) );
+        request.setPagesAllocated(pagesNeeded);
+        request.setFirstVirtualPage(firstVirtualPage);
+        requestQueue.add( request );
 
         physicalMemory.printHeap();
         pageTable.printPageTable();
@@ -111,7 +112,13 @@ public class MemoryManager {
 
 
     public static void main(String[] args) {
-        MemoryManager simulator = new MemoryManager(1, 64);//size/pageSize=numPages
+        MemoryManager simulator = new MemoryManager(1, 64);//user informa tamanho da heap (KB) e page (B)  -  size/pageSize=numPages
+        RequestGenerator rg = new RequestGenerator(4, 256);//informa limite de tamanho (B) mínimo e máximo de requests
+
+        int quantidade = 2;//informa quantidade de requests
+        for(int x = 0; x < quantidade; x++){
+            simulator.allocateVariable( rg.generateRequest() );
+        }
 
         /*simulator.allocateVariable(1, 512);
         simulator.allocateVariable(2, 388);
@@ -119,13 +126,13 @@ public class MemoryManager {
         simulator.allocateVariable(4, 256);
         simulator.allocateVariable(5, 64);*/
 
-        simulator.allocateVariable(1, 128);
-        simulator.allocateVariable(2, 256);
-        simulator.allocateVariable(3, 128);
-        simulator.allocateVariable(4, 128);
-        simulator.allocateVariable(5, 128);
-        simulator.allocateVariable(6, 128);
-        simulator.allocateVariable(7, 256);
-        simulator.allocateVariable(8, 256);
+        /*simulator.allocateVariable( new Request(1, 128) );
+        simulator.allocateVariable( new Request(2, 256) );
+        simulator.allocateVariable( new Request(3, 128) );
+        simulator.allocateVariable( new Request(4, 128) );
+        simulator.allocateVariable( new Request(5, 128) );
+        simulator.allocateVariable( new Request(6, 128) );
+        simulator.allocateVariable( new Request(7, 256) );
+        simulator.allocateVariable( new Request(8, 256) );*/
     }
 }

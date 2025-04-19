@@ -3,8 +3,8 @@ package MMS;
 public class PageTable {
     private PageTableEntry[] entries;//index (página virtual) -> value (frame físico)
     private final int pageSizeB;
+    private final int pageSizeInt;
     private final int numPages;
-    private int pageSizeInt;
 
     public PageTable(int heapSizeKB, int pageSizeB) {
         this.pageSizeB = pageSizeB;
