@@ -9,16 +9,17 @@ public class MemoryManager {
     private PhysicalMemory physicalMemory;
     private PageTable pageTable;
     private Queue<Request> requestQueue;
+    private static int totalFreedRequests = 0;
 
-    private MemoryManager(int heapSizeKB, int pageSizeB) {
-        this.physicalMemory = new PhysicalMemory(heapSizeKB, pageSizeB);
-        this.pageTable = new PageTable(heapSizeKB, pageSizeB);
+    private MemoryManager(PhysicalMemory physicalMemory, PageTable PageTable) {
+        this.physicalMemory = physicalMemory;
+        this.pageTable = PageTable;
         this.requestQueue = new LinkedList<>();
     }
 
 
     private void allocateVariable(Request request) {
-        System.out.println( request.getSizeB() );
+        System.out.println("tamanho da requisição em bytes: " + request.getSizeB() );
         int sizeInt = request.getSizeB() / 4;
         int pagesNeeded = (int) Math.ceil((double) sizeInt / pageTable.getPageSizeInt());
         System.out.println("precisara da seguinte quantidade de paginas para alocar: " + pagesNeeded);
@@ -93,6 +94,7 @@ public class MemoryManager {
         while (freedFrames < targetFreed && !requestQueue.isEmpty()) {//acumula requests até bater o número de frames alvo ou mais (30%+)
             Request oldest = requestQueue.poll();
             freedFrames += oldest.getPagesAllocated();
+            totalFreedRequests++;//total de variáveis removidas da heap
 
             //desmapeia todas as páginas da requisição e desaloca da memória
             for (int i = 0; i < oldest.getPagesAllocated(); i++) {
@@ -106,26 +108,36 @@ public class MemoryManager {
             System.out.println("liberado " + oldest.getPagesAllocated() + " frames da variavel " + oldest.getVariableId());
         }
 
-        System.out.println("total liberado: " + freedFrames + " frames");
+        System.out.println("total liberado: " + freedFrames + " frames. | total de variaveis removidas ate agora: " + totalFreedRequests);
     }
 
 
 
     public static void main(String[] args) {
-        MemoryManager simulator = new MemoryManager(1, 64);//user informa tamanho da heap (KB) e page (B)  -  size/pageSize=numPages
+        //user informa tamanho da heap (KB) e page (B)  -  size/pageSize=numPages
+        int heapSizeKB = 1;
+        int pageSizeB = 64;
+        PhysicalMemory physicalMemory = new PhysicalMemory(heapSizeKB, pageSizeB);
+        PageTable pageTable = new PageTable(heapSizeKB, pageSizeB);
+
+        MemoryManager simulator = new MemoryManager(physicalMemory, pageTable);
         RequestGenerator rg = new RequestGenerator(4, 256);//informa limite de tamanho (B) mínimo e máximo de requests
 
-        int quantidade = 2;//informa quantidade de requests
+        int quantidade = 5;//informa quantidade de requests
+        long startTime = System.nanoTime();
         for(int x = 0; x < quantidade; x++){
             simulator.allocateVariable( rg.generateRequest() );
         }
 
+
+        //page e fragmentação
         /*simulator.allocateVariable(1, 512);
         simulator.allocateVariable(2, 388);
         simulator.allocateVariable(3, 256);
         simulator.allocateVariable(4, 256);
         simulator.allocateVariable(5, 64);*/
 
+        //page
         /*simulator.allocateVariable( new Request(1, 128) );
         simulator.allocateVariable( new Request(2, 256) );
         simulator.allocateVariable( new Request(3, 128) );
@@ -134,5 +146,16 @@ public class MemoryManager {
         simulator.allocateVariable( new Request(6, 128) );
         simulator.allocateVariable( new Request(7, 256) );
         simulator.allocateVariable( new Request(8, 256) );*/
+
+        long endTime = System.nanoTime();
+        double runtimeMS = (endTime - startTime) / 1000000.0;
+
+        double AverageRequestSizeB = (double) rg.getTotalRandomSizeB() / quantidade;
+
+        System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
+        System.out.println("tempo total de execucao da memoria em MS: " + runtimeMS);
+        //System.out.println("numero total de requisiçoes atendidas: " + quantidade);
+        System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
     }
+
 }
