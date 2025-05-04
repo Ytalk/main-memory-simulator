@@ -1,10 +1,12 @@
 package MMS;
 
+import java.util.List;
+
 public class Request {
     private final int variableId;
     private final int sizeB;
     private int pagesAllocated;
-    private int firstVirtualPage;
+    private List<Integer> pagesAllocatedList;
 
     public Request(int variableId, int sizeB) {
         this.variableId = variableId;
@@ -27,12 +29,12 @@ public class Request {
         pagesAllocated = pagesNeeded;
     }
 
-    public int getFirstVirtualPage() {
-        return firstVirtualPage;
+    public List<Integer> getPagesAllocatedList(){
+        return pagesAllocatedList;
     }
 
-    public void setFirstVirtualPage(int firstVirtualPage){
-        this.firstVirtualPage = firstVirtualPage;
+    public void setPagesAllocatedList(List<Integer> freePages){
+        pagesAllocatedList = freePages;
     }
 
 }
