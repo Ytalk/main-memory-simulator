@@ -38,10 +38,6 @@ public class PageTable {
         return entries[virtualPage].getPhysicalFrame();
     }
 
-    public int getPageSizeB() {
-        return pageSizeB;
-    }
-
     public int getPageSizeInt(){
         return pageSizeInt;
     }

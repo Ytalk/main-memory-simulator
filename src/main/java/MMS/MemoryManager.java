@@ -19,34 +19,34 @@ public class MemoryManager {
 
 
     private void allocateVariable(Request request) {
-        System.out.println("tamanho da requisição em bytes: " + request.getSizeB() );
+        System.out.println("\ntamanho da requisição em bytes: " + request.getSizeB() );
         int sizeInt = request.getSizeB() / 4;
         int pagesNeeded = (int) Math.ceil((double) sizeInt / pageTable.getPageSizeInt());
-        System.out.println("precisara da seguinte quantidade de paginas para alocar: " + pagesNeeded);
+        ///System.out.println("precisara da seguinte quantidade de paginas para alocar: " + pagesNeeded);
 
-
-        //tamanho real a ser alocado (múltiplo da página) DEBUG
+        //tamanho real a ser alocado (múltiplo da página)
         int allocatedInts = pagesNeeded * pageTable.getPageSizeInt();
         System.out.println("solicitado: " + sizeInt + " ints | alocado: " + allocatedInts + " ints | fragmentado: " + (allocatedInts - sizeInt));
 
+
         int[] allocatedFrames = physicalMemory.allocateFrames(pagesNeeded);
         if (allocatedFrames == null) {
-            System.out.println("memoria insuficiente. liberando...");
+            System.out.println("\nmemoria insuficiente! liberando...");
             freeOldestRequests();
             allocatedFrames = physicalMemory.allocateFrames(pagesNeeded);
 
             if (allocatedFrames == null) {
-                System.out.println("falha");
-                return;
+                throw new RuntimeException("falha ao alocar mesmo após liberar espaço na memória.");
             }
         }
 
 
         //atualiza pageTable (mapeia páginas -> frames)
         List<Integer> freePages = findFreeVirtualPages(pagesNeeded);
-        System.out.println("paginas livres encontradas: " + freePages);
+        System.out.println(freePages + " <- paginas livres encontradas para alocamento\n");
 
         for (int i = 0; i < pagesNeeded; i++) {
+            //listas de paginas e frames utilizados pela requisição
             int virtualPage = freePages.get(i);
             int physicalFrame = allocatedFrames[i];
             pageTable.map(virtualPage, physicalFrame);
@@ -56,7 +56,7 @@ public class MemoryManager {
         //escreve nos frames alocados
         int remaining = sizeInt;
         for (int i = 0; i < pagesNeeded; i++) {
-            int write = Math.min(remaining, pageTable.getPageSizeInt());//fragmentará ou preencherá a page
+            int write = Math.min(remaining, pageTable.getPageSizeInt());//fragmentará (remaining menor que page) ou preencherá a page
             for (int j = 0; j < write; j++) {
                 physicalMemory.writeHeap(allocatedFrames[i], j, request.getVariableId());
             }
@@ -68,6 +68,7 @@ public class MemoryManager {
         requestQueue.add( request );
 
         physicalMemory.printHeap();
+        System.out.println("\n");
         pageTable.printPageTable();
     }
 
@@ -86,10 +87,11 @@ public class MemoryManager {
 
     private void freeOldestRequests() {
         //aproximadamente 30% do tamanho total da heap (de acordo com o número de frames)
-        int targetFreed = (int) Math.ceil(physicalMemory.getNumFrames() * 0.3);
-        int freedFrames = 0;
+        int heapPorcentage = (int) Math.ceil(physicalMemory.getHeapSizeB() * 0.3);
+        int targetFreed = (int) Math.ceil( (double) heapPorcentage / physicalMemory.getFrameSizeB() );//converte para número de frames
 
-        System.out.println("precisa liberar pelo menos " + targetFreed + " frames (30% do total da heap)");
+        int freedFrames = 0;
+        System.out.println("precisa liberar pelo menos " + heapPorcentage + " bytes (" + targetFreed + " frames)");
 
         while (freedFrames < targetFreed && !requestQueue.isEmpty()) {//acumula requests até bater o número de frames alvo ou mais (30%+)
             Request oldest = requestQueue.poll();
@@ -100,45 +102,40 @@ public class MemoryManager {
             for (int virtualPage : oldest.getPagesAllocatedList()) {
                 int physicalFrame = pageTable.getPhysicalFrame(virtualPage);
 
-                //if (physicalFrame != -1) {
-                    pageTable.unmap(virtualPage);
-                    physicalMemory.freeFrame(physicalFrame);//muda alocado para falso e zera o heap associado ao frame (numero e tamanho do frame)
-                    System.out.println("desmapeado: pagina " + virtualPage + " -> frame " + physicalFrame);
-                //}
+                pageTable.unmap(virtualPage);
+                physicalMemory.freeFrame(physicalFrame);//muda alocado para falso e zera o heap associado ao frame (numero e tamanho do frame)
+                System.out.println("desmapeado: pagina " + virtualPage + " -> frame " + physicalFrame);
             }
 
-            System.out.println("liberado " + oldest.getPagesAllocated() + " frames da variavel " + oldest.getVariableId());
+            System.out.println("liberado " + oldest.getPagesAllocated() + " frames - variavel " + oldest.getVariableId());
         }
 
-        System.out.println("total liberado: " + freedFrames + " frames. | total de variaveis removidas ate agora: " + totalFreedRequests);
+        System.out.println("\ntotal liberado: " + freedFrames + " frames. | total de variaveis removidas ate agora: " + totalFreedRequests);
     }
 
 
-
     public static void main(String[] args) {
-        //user informa tamanho da heap (KB) e page (B)  -  size/pageSize=numPages
+        //user informa tamanho da heap (KB) e page (B) - size/pageSize=numPages
         int heapSizeKB = 1;
         int pageSizeB = 64;
         PhysicalMemory physicalMemory = new PhysicalMemory(heapSizeKB, pageSizeB);
         PageTable pageTable = new PageTable(heapSizeKB, pageSizeB);
 
         MemoryManager simulator = new MemoryManager(physicalMemory, pageTable);
-        RequestGenerator rg = new RequestGenerator(4, 256);//informa limite de tamanho (B) mínimo e máximo de requests
+        //RequestGenerator rg = new RequestGenerator(4, 256);//informa limite de tamanho (B) mínimo e máximo de requests
 
-        //int quantidade = 5;//informa quantidade de requests
+        //int quantidade = 55;//informa quantidade de requests
         long startTime = System.nanoTime();
         /*for(int x = 0; x < quantidade; x++){
             simulator.allocateVariable( rg.generateRequest() );
         }*/
 
-
         //page e fragmentação
         simulator.allocateVariable( new Request(1, 512) );
         simulator.allocateVariable( new Request(2, 388) );
-        simulator.allocateVariable( new Request(3, 256) );
-        simulator.allocateVariable( new Request(4, 320) );
-        //simulator.allocateVariable( new Request(4, 256) );
-        //simulator.allocateVariable( new Request(5, 64) );
+        simulator.allocateVariable( new Request(3, 240) );
+        simulator.allocateVariable( new Request(4, 256) );
+        simulator.allocateVariable( new Request(5, 512) );
 
         //page
         /*simulator.allocateVariable( new Request(1, 128) );
@@ -150,15 +147,16 @@ public class MemoryManager {
         simulator.allocateVariable( new Request(7, 256) );
         simulator.allocateVariable( new Request(8, 256) );*/
 
+
         long endTime = System.nanoTime();
         double runtimeMS = (endTime - startTime) / 1000000.0;
 
         //double AverageRequestSizeB = (double) rg.getTotalRandomSizeB() / quantidade;
 
+        //System.out.println("\nnumero total de requisiçoes atendidas: " + quantidade);
         //System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
-        System.out.println("tempo total de execucao da memoria em MS: " + runtimeMS);
-        //System.out.println("numero total de requisiçoes atendidas: " + quantidade);
         System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
+        System.out.println("tempo total de execucao da memoria em MS: " + runtimeMS);
     }
 
 }

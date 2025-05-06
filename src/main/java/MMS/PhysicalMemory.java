@@ -44,12 +44,12 @@ public class PhysicalMemory {
         //busca qualquer frame livre
         if (allocatedFrames.size() < pagesNeeded) {
             for (int i = 0; i < numFrames && allocatedFrames.size() < pagesNeeded; i++) {
-                System.out.println("frame " + i);
-                System.out.println("alocado? " + frames[i].isAllocated());
+                ///System.out.println("frame " + i);
+                ///System.out.println("alocado? " + frames[i].isAllocated());
                 if (!frames[i].isAllocated()) {
                     allocatedFrames.add(i);
                     frames[i].setAllocated(true);
-                    System.out.println("entrou");
+                    ///System.out.println("entrou");
                 }
             }
         }
@@ -84,7 +84,7 @@ public class PhysicalMemory {
     public void freeFrame(int frame) {
         if (frame >= 0 && frame < numFrames) {
             frames[frame].setAllocated(false);
-            System.out.println(frame + " mudado para falso");
+            ///System.out.println(frame + " mudado para falso");
             //limpa heap associado a esse frame
             int start = frame * frameSizeInt;
             int end = start + frameSizeInt;
@@ -92,10 +92,6 @@ public class PhysicalMemory {
                 heap[i] = 0;
             }
         }
-    }
-
-    public int getHeapSizeInt(){
-        return heapSizeInt;
     }
 
     public int getNumFrames(){
@@ -108,4 +104,11 @@ public class PhysicalMemory {
         }
     }
 
+    public int getFrameSizeB() {
+        return frameSizeB;
+    }
+
+    public int getHeapSizeB() {
+        return heapSizeB;
+    }
 }

@@ -3,7 +3,6 @@ package MMS;
 public class Frame {
     private final int indexFrame;
     private boolean isAllocated;
-    //armazenar id da requisição?
 
     public Frame(int index, boolean isAllocated){
         this.indexFrame = index;
