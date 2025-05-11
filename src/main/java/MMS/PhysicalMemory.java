@@ -73,11 +73,20 @@ public class PhysicalMemory {
     }
 
 
-    //escreve em um frame específico, marcando a heap com o ID da variável
-    public void writeHeap(int frameIndex, int frameOffset, int variableId) {
+    //escreve em um frame específico, marcando a heap com o ID da variável (versão realista)
+    /*public void writeHeap(int frameIndex, int frameOffset, int variableId) {
         int startIndex = frameIndex * frameSizeInt + frameOffset;
-        if (startIndex >= 0 && startIndex < heap.length) {
+        //if (startIndex >= 0 && startIndex < heap.length) {
             heap[startIndex] = variableId;
+        //}
+    }*/
+
+    //(versão otimizada)
+    public void writeBlock(int frameIndex, int variableId, int count) {
+        int start = frameIndex * frameSizeInt;
+        int end = Math.min(start + count, start + frameSizeInt);
+        for (int i = start; i < end; i++) {
+            heap[i] = variableId;
         }
     }
 
