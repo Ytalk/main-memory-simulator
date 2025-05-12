@@ -1,18 +1,21 @@
 package MMS;
 
 public class PageTableEntry {
-    private int physicalFrame;//número do frame (-1 se não mapeado)
+    private volatile int frame;//número do frame (-1 se não mapeado)
+    private volatile boolean present;
+    private volatile int protection;
 
-    public PageTableEntry(int physicalFrame){
-        this.physicalFrame = physicalFrame;
+    public PageTableEntry(int frame){
+        this.frame = frame;
+        this.present = (frame != -1);
     }
 
     public int getPhysicalFrame() {
-        return physicalFrame;
+        return frame;
     }
 
     public void setPhysicalFrame(int frame){
-        physicalFrame = frame;
+        this.frame = frame;
     }
 
 }

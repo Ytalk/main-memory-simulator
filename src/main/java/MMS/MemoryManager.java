@@ -113,7 +113,7 @@ public class MemoryManager {
 
     //atualiza pageTable (mapeia páginas -> frames)
     private void mapPages(Request request, int[] allocatedFrames) {
-        List<Integer> freePages = findFreeVirtualPages(allocatedFrames.length);
+        List<Integer> freePages = pageTable.findFreeVirtualPages(allocatedFrames.length);
         System.out.println(freePages + " <- paginas livres encontradas para alocamento\n");
 
         for (int i = 0; i < allocatedFrames.length; i++) {
@@ -123,17 +123,6 @@ public class MemoryManager {
 
         request.setPagesAllocated(allocatedFrames.length);
         request.setPagesAllocatedList(freePages);
-    }
-
-    //retorna uma lista de paginas livres
-    private List<Integer> findFreeVirtualPages(int pagesNeeded) {
-        List<Integer> freePages = new ArrayList<>();
-        for (int i = 0; i < pageTable.getNumPages() && freePages.size() < pagesNeeded; i++) {
-            if (!pageTable.isMapped(i)) {
-                freePages.add(i);
-            }
-        }
-        return freePages;
     }
 
 
