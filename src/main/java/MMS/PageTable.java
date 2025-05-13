@@ -2,6 +2,7 @@ package MMS;
 
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -24,7 +25,7 @@ public class PageTable {
 
     private void initializeEntries() {
         for (int i = 0; i < numPages; i++) {
-            entries[i] = new PageTableEntry(-1);//-1 = não mapeado
+            Arrays.fill( entries, new PageTableEntry() );//-1 = não mapeado
         }
     }
 

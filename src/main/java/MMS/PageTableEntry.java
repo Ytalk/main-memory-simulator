@@ -5,6 +5,10 @@ public class PageTableEntry {
     private volatile boolean present;
     private volatile int protection;
 
+    public PageTableEntry() {
+        this(-1);
+    }
+
     public PageTableEntry(int frame){
         this.frame = frame;
         this.present = (frame != -1);
