@@ -1,5 +1,8 @@
 package MMS;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -25,17 +28,17 @@ public class MemoryManager {
     }
 
 
-    private int[] tryAllocateFrames(int pagesNeeded) {
-        int[] allocatedFrames = physicalMemory.allocateFrames(pagesNeeded);
+    private int[] tryFindFreeFrames(int pagesNeeded) {
+        int[] allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
         if (allocatedFrames == null) {
             System.out.println("\nmemoria insuficiente! liberando...");
             freeOldestRequests();
-            allocatedFrames = physicalMemory.allocateFrames(pagesNeeded);
+            allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
 
             if (allocatedFrames == null) {
                 System.out.println("\nmemoria insuficiente! liberando... (segunda e ultima tentativa)");
                 freeOldestRequests();
-                allocatedFrames = physicalMemory.allocateFrames(pagesNeeded);
+                allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
                 if (allocatedFrames == null) {
                     throw new RuntimeException("falha ao alocar mesmo após liberar espaço na memória.");//custom
                 }
@@ -75,21 +78,14 @@ public class MemoryManager {
         logAllocationRequest(request, sizeInt, pagesNeeded, pageTable.getPageSizeInt());
 
 
-        int[] allocatedFrames = tryAllocateFrames(pagesNeeded);
+        int[] allocatedFrames = tryFindFreeFrames(pagesNeeded);
 
         mapPages(request, allocatedFrames);
 
         //escreve nos frames alocados
-        /*int remaining = sizeInt;
-        for (int i = 0; i < pagesNeeded; i++) {
-            //fragmentará (remaining menor que page) ou preencherá a page
-            int write = Math.min(remaining, pageTable.getPageSizeInt());
-            for (int j = 0; j < write; j++) {
-                physicalMemory.writeHeap(allocatedFrames[i], j, request.getVariableId());
-            }
-            remaining -= write;//subtrai size até ele zerar (como última page ou fragmentação interna)
-        }*/
-        writeDataBatch(request, allocatedFrames, sizeInt, pageTable.getPageSizeInt());
+        physicalMemory.writeToHeap(request.getVariableId(), allocatedFrames, sizeInt, pageTable.getPageSizeInt());
+
+        //writeDataBatch(request, allocatedFrames, sizeInt, pageTable.getPageSizeInt());
 
         requestQueue.add( request );
 
@@ -105,7 +101,7 @@ public class MemoryManager {
         for (int frame : frames) {
             int toWrite = Math.min(remaining, pageSizeInts);
             //escrita em lote: preenche "toWrite" posições do frame
-            physicalMemory.writeBlock(frame, request.getVariableId(), toWrite);
+            //physicalMemory.writeBlock(frame, request.getVariableId(), toWrite);
             remaining -= toWrite;
         }
     }
@@ -124,6 +120,29 @@ public class MemoryManager {
         request.setPagesAllocated(allocatedFrames.length);
         request.setPagesAllocatedList(freePages);
     }
+
+
+    public void loadRequestsFromFile(String filePath) {
+        try (BufferedReader reader = new BufferedReader( new FileReader(filePath) )) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+
+                if (!line.isEmpty()) {
+                    String[] partes = line.split(",");
+                    if (partes.length == 2) {
+                        int id = Integer.parseInt(partes[0].trim());
+                        int size = Integer.parseInt(partes[1].trim());
+
+                        allocateVariable(new Request(id, size));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("error: " + e.getMessage());
+        }
+    }
+
 
 
     public static void main(String[] args) {

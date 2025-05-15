@@ -29,7 +29,7 @@ public class PageTable {
         }
     }
 
-    //mapeia - página -> frame
+    //mapeia = página -> frame
     public void map(int virtualPage, int physicalFrame) {//primeiro frame disponivel que encontrar
         rwLock.writeLock().lock();
         try {
