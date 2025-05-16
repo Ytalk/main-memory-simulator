@@ -2,12 +2,11 @@ package MMS;
 
 import com.google.common.util.concurrent.Striped;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 
 public class PhysicalMemory {
@@ -21,10 +20,10 @@ public class PhysicalMemory {
     private final int heapSizeB;
     private final int heapSizeInt;
 
-    private final BitSet freeFrames;
+    //private final BitSet freeFrames;
+    private final ConcurrentLinkedQueue<Integer> freeFramesQueue = new ConcurrentLinkedQueue<>();
 
     private final Striped<Lock> frameLocks;
-    private final Lock allocationLock = new ReentrantLock();
 
     public PhysicalMemory(int heapSizeKB, int frameSizeB) {//heap e page
         this.heapSizeKB = heapSizeKB;
@@ -37,7 +36,7 @@ public class PhysicalMemory {
         this.numFrames = heapSizeB / frameSizeB;
         this.frames = new Frame[numFrames];
 
-        this.freeFrames = new BitSet(numFrames);
+        //this.freeFrames = new BitSet(numFrames);
 
         this.frameLocks = Striped.lock(numFrames);
 
@@ -45,21 +44,16 @@ public class PhysicalMemory {
     }
 
     private void initializeFrames() {
-        freeFrames.set(0, numFrames);
+        //freeFrames.set(0, numFrames);
         for (int i = 0; i < numFrames; i++) {
             frames[i] = new Frame(i);
+            freeFramesQueue.add(i);
         }
     }
 
-    /*private void initializeFrames() {
-        for (int i = 0; i < numFrames; i++) {
-            frames[i] = new Frame(i, false);
-        }
-    }*/
-
 
     //para alocar frames (contíguos ou espalhados)
-    public int[] findFreePhysicalFrames(int pagesNeeded) {
+    /*public int[] findFreePhysicalFrames(int pagesNeeded) {
         allocationLock.lock();
         try {
             int[] freeFramesFound = new int[pagesNeeded];
@@ -83,30 +77,25 @@ public class PhysicalMemory {
         } finally {
             allocationLock.unlock();
         }
+    }*/
+    public int[] findFreePhysicalFrames(int pagesNeeded) {
+        int[] freeFramesFound = new int[pagesNeeded];
+        for (int i = 0; i < pagesNeeded; i++) {
+            Integer frame = freeFramesQueue.poll();
+            if (frame == null) {
+                //rollback dos frames já alocados
+                for (int j = 0; j < i; j++) {
+                    freeFramesQueue.add(freeFramesFound[j]);
+                }
+                return null;
+            }
+            freeFramesFound[i] = frame;
+        }
+        return freeFramesFound;
     }
 
 
-    //(versão otimizada)
-    /*public void writeBlock(int frameIndex, int variableId, int count) {
-        Lock lock = frameLocks.get(frameIndex);
-        lock.lock();
-        try {
-            int start = frameIndex * frameSizeInt;
-            //vai até uma parte (fragmentação) ou final do frame
-            int end = Math.min(start + count, start + frameSizeInt);
-            Arrays.fill(heap, start, end, variableId);
-        } finally {
-            lock.unlock();
-        }
-
-
-        int start = frameIndex * frameSizeInt;//
-        int end = Math.min(start + count, start + frameSizeInt);
-        for (int i = start; i < end; i++) {
-            heap[i] = variableId;//heap.set(i, variableId); <- atomic
-        }
-    }*/
-
+    //batch write com Arrays
     public void writeToHeap(int variableId, int[] frames, int intsNeeded, int pageSizeInts) {
         int remaining = intsNeeded;
         for (int frameIndex : frames) {
@@ -130,10 +119,11 @@ public class PhysicalMemory {
     //limpa heap associado a esse frame (abordagem hybrid para não sobreescrever 0 [fragmentação]?)
     public void freeFrame(int frame) {
         //(frame >= 0 && frame < numFrames)
+        freeFramesQueue.add(frame);
         Lock lock = frameLocks.get(frame);
         lock.lock();
         try {
-            freeFrames.set(frame);
+            //freeFrames.set(frame);
             //(page 16int) = 0...15 (16num); 16...31 (16num); 32...47 (16 num).... end = start + frameSizeInt
             Arrays.fill(heap, frame * frameSizeInt, (frame + 1) * frameSizeInt, 0);
         } finally {

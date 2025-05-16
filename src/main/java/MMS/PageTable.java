@@ -1,15 +1,18 @@
 package MMS;
 
 
+import com.google.common.util.concurrent.Striped;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.locks.Lock;
 
 public class PageTable {
     private PageTableEntry[] entries;//index (página virtual) -> value (frame físico)
-    private final ReadWriteLock rwLock = new ReentrantReadWriteLock(true);
+    private Striped<Lock> pageLocks;
+    private final ConcurrentLinkedQueue<Integer> freePagesQueue = new ConcurrentLinkedQueue<>();
 
     private final int pageSizeB;
     private final int pageSizeInt;
@@ -20,76 +23,83 @@ public class PageTable {
         this.pageSizeInt = pageSizeB / 4;
         this.numPages = (heapSizeKB * 1024) / pageSizeB;
         this.entries = new PageTableEntry[numPages];
+        pageLocks = Striped.lock(numPages);
         initializeEntries();
     }
 
-    private void initializeEntries() {
+    /*private void initializeEntries() {
         for (int i = 0; i < numPages; i++) {
             Arrays.fill( entries, new PageTableEntry() );//-1 = não mapeado
+            freePagesQueue.add(i);
+        }
+    }*/
+
+    private void initializeEntries() {
+        for (int i = 0; i < numPages; i++) {
+            entries[i] = new PageTableEntry();
+            freePagesQueue.add(i);
         }
     }
 
+
     //mapeia = página -> frame
     public void map(int virtualPage, int physicalFrame) {//primeiro frame disponivel que encontrar
-        rwLock.writeLock().lock();
+        Lock lock = pageLocks.get(virtualPage);//write
+        lock.lock();
         try {
+            //entries[virtualPage].setPhysicalFrame(physicalFrame);
             entries[virtualPage] = new PageTableEntry(physicalFrame);
         } finally {
-            rwLock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     public void unmap(int virtualPage) {
-        rwLock.writeLock().lock();
+        Lock lock = pageLocks.get(virtualPage);//write
+        lock.lock();
         try {
             entries[virtualPage].setPhysicalFrame(-1);
+            freePagesQueue.add(virtualPage);
         } finally {
-            rwLock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     public boolean isMapped(int virtualPage) {
-        rwLock.writeLock().lock();
+        Lock lock = pageLocks.get(virtualPage);//read
+        lock.lock();
         try {
             return entries[virtualPage].getPhysicalFrame() != -1;
         } finally {
-            rwLock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     //retorna o frame associado com a página
     public int getPhysicalFrame(int virtualPage) {
-        rwLock.writeLock().lock();
+        Lock lock = pageLocks.get(virtualPage);//read
+        lock.lock();
         try {
             return entries[virtualPage].getPhysicalFrame();
         } finally {
-            rwLock.writeLock().unlock();
+            lock.unlock();
         }
     }
 
     //percorre a page table até obter a quantidade de pages livres necessárias, retorna uma lista com as paginas obtidas
     public List<Integer> findFreeVirtualPages(int pagesNeeded) {
         List<Integer> freePages = new ArrayList<>();
-
-        rwLock.writeLock().lock();
-        try {
-            for (int i = 0; i < numPages && freePages.size() < pagesNeeded; i++) {
-                if (!isMapped(i))
-                    freePages.add(i);
-            }
-        } finally {
-            rwLock.writeLock().unlock();
+        for (int i = 0; i < pagesNeeded; i++) {
+            Integer page = freePagesQueue.poll();
+            //if (page == null) break;
+            freePages.add(page);
         }
-
         return freePages;
     }
 
+
     public int getPageSizeInt(){
         return pageSizeInt;
-    }
-
-    public int getNumPages(){
-        return numPages;
     }
 
     public void printPageTable() {
