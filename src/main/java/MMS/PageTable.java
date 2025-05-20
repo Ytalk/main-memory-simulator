@@ -8,10 +8,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class PageTable {
     private PageTableEntry[] entries;//index (página virtual) -> value (frame físico)
     private Striped<Lock> pageLocks;
+    private Lock lock = new ReentrantLock();
     private final ConcurrentLinkedQueue<Integer> freePagesQueue = new ConcurrentLinkedQueue<>();
 
     private final int pageSizeB;
@@ -40,7 +42,6 @@ public class PageTable {
             freePagesQueue.add(i);
         }
     }
-
 
     //mapeia = página -> frame
     public void map(int virtualPage, int physicalFrame) {//primeiro frame disponivel que encontrar
@@ -88,15 +89,19 @@ public class PageTable {
 
     //percorre a page table até obter a quantidade de pages livres necessárias, retorna uma lista com as paginas obtidas
     public List<Integer> findFreeVirtualPages(int pagesNeeded) {
-        List<Integer> freePages = new ArrayList<>();
-        for (int i = 0; i < pagesNeeded; i++) {
-            Integer page = freePagesQueue.poll();
-            //if (page == null) break;
-            freePages.add(page);
+        List<Integer> foundFreePages = new ArrayList<>();
+        lock.lock();
+        try {
+            for (int i = 0; i < pagesNeeded; i++) {
+                Integer page = freePagesQueue.poll();
+                //if (page == null) break; freeFrames já fez esse trabalho
+                foundFreePages.add(page);
+            }
+            return foundFreePages;
+        } finally {
+            lock.unlock();
         }
-        return freePages;
     }
-
 
     public int getPageSizeInt(){
         return pageSizeInt;

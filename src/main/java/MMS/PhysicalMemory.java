@@ -22,7 +22,6 @@ public class PhysicalMemory {
 
     //private final BitSet freeFrames;
     private final ConcurrentLinkedQueue<Integer> freeFramesQueue = new ConcurrentLinkedQueue<>();
-
     private final Striped<Lock> frameLocks;
 
     public PhysicalMemory(int heapSizeKB, int frameSizeB) {//heap e page
@@ -37,9 +36,7 @@ public class PhysicalMemory {
         this.frames = new Frame[numFrames];
 
         //this.freeFrames = new BitSet(numFrames);
-
         this.frameLocks = Striped.lock(numFrames);
-
         initializeFrames();
     }
 
@@ -50,7 +47,6 @@ public class PhysicalMemory {
             freeFramesQueue.add(i);
         }
     }
-
 
     //para alocar frames (contíguos ou espalhados)
     /*public int[] findFreePhysicalFrames(int pagesNeeded) {
@@ -93,7 +89,6 @@ public class PhysicalMemory {
         }
         return freeFramesFound;
     }
-
 
     //batch write com Arrays
     public void writeToHeap(int variableId, int[] frames, int intsNeeded, int pageSizeInts) {
