@@ -6,17 +6,21 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Scanner;
 
-
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MemoryManager {
     private final PhysicalMemory physicalMemory;
     private final PageTable pageTable;
 
-    private final ConcurrentLinkedQueue<Request> allocatedRequestsQueue = new ConcurrentLinkedQueue();
+    private final ConcurrentLinkedQueue<Request> readyQueue = new ConcurrentLinkedQueue();
 
+    boolean isFreeing;
+    AtomicInteger count = new AtomicInteger(0);
     private final Object toMonitor = new Object();
+    private final Semaphore lockForFreeding = new Semaphore(1);
+
     private static AtomicInteger totalFreedRequests = new AtomicInteger(0);
 
 
@@ -52,100 +56,169 @@ public class MemoryManager {
         return allocatedFrames;
     }
 
-    public void freeOldestRequests() {
-        //synchronized (toMonitor) {
+    //encontra frames livres ou descobre que não há frames/espaço suficiente
+    public void freeOldestRequests() {//Medium-Term Scheduler
+        //aproximadamente 30% do tamanho total da heap (de acordo com o número de frames)
+        int targetFreed = (int) Math.ceil(physicalMemory.getNumFrames() * 0.3);
+        System.out.println("precisa liberar pelo menos " + targetFreed + " frames (30% da heap)");
 
-            //aproximadamente 30% do tamanho total da heap (de acordo com o número de frames)
-            int targetFreed = (int) Math.ceil(physicalMemory.getNumFrames() * 0.3);
-            System.out.println("precisa liberar pelo menos " + targetFreed + " frames (30% da heap)");
+        int freedFrames = 0;
+        while (freedFrames < targetFreed && !readyQueue.isEmpty()) {//acumula requests até bater o número de frames alvo ou mais (30%+)
+            Request oldest = readyQueue.poll();
+            freedFrames += oldest.getPagesAllocated();
+            totalFreedRequests.incrementAndGet();//total de variáveis removidas da heap
 
-            int freedFrames = 0;
-            while (freedFrames < targetFreed && !allocatedRequestsQueue.isEmpty()) {//acumula requests até bater o número de frames alvo ou mais (30%+)
-                Request oldest = allocatedRequestsQueue.poll();
-                freedFrames += oldest.getPagesAllocated();
-                totalFreedRequests.incrementAndGet();//total de variáveis removidas da heap
+            for (int virtualPage : oldest.getPagesAllocatedList()) {//desmapeia todas as páginas da requisição e desaloca da memória
+                int physicalFrame = pageTable.getPhysicalFrame(virtualPage);
 
-                for (int virtualPage : oldest.getPagesAllocatedList()) {//desmapeia todas as páginas da requisição e desaloca da memória
-                    int physicalFrame = pageTable.getPhysicalFrame(virtualPage);
-
-                    pageTable.unmap(virtualPage);
-                    physicalMemory.freeFrame(physicalFrame);//muda alocado para falso e zera o heap associado ao frame (numero e tamanho do frame)
-                    System.out.println("desmapeado: pagina " + virtualPage + " -> frame " + physicalFrame);
-                }
-                System.out.println("liberado " + oldest.getPagesAllocated() + " frames - variavel " + oldest.getVariableId());
+                pageTable.unmap(virtualPage);
+                physicalMemory.freeFrame(physicalFrame);//muda alocado para falso e zera o heap associado ao frame (numero e tamanho do frame)
+                System.out.println("desmapeado: pagina " + virtualPage + " -> frame " + physicalFrame);
             }
-            System.out.println("\ntotal liberado: " + freedFrames + " frames. | total de variaveis removidas ate agora: " + totalFreedRequests);
-
-        //}
+            System.out.println("liberado " + oldest.getPagesAllocated() + " frames - variavel " + oldest.getVariableId());
+        }
+        System.out.println("\ntotal liberado: " + freedFrames + " frames. | total de variaveis removidas ate agora: " + totalFreedRequests);
     }
 
 
-    public void allocateVariable(Request request) {
+    /*public void allocateVariable(Request request) {
         int sizeInt = (request.getSizeB() + Integer.BYTES - 1) / Integer.BYTES;
         int pagesNeeded = (sizeInt + pageTable.getPageSizeInt() - 1) / pageTable.getPageSizeInt();
         int[] allocatedFrames;
-
-        //synchronized (toMonitor) {
-        //}
 
         synchronized (toMonitor) {
             logAllocationRequest(request, sizeInt, pagesNeeded, pageTable.getPageSizeInt());
             allocatedFrames = tryFindFreeFrames(pagesNeeded);//encontra frames livres ou descobre que não há frames/espaço suficiente
             mapPages(request, allocatedFrames);//encontra pages livres e faz mapeamento com os frames livres
             physicalMemory.writeToHeap(request.getVariableId(), allocatedFrames, sizeInt, pageTable.getPageSizeInt());//escreve nos frames encontrados
-            allocatedRequestsQueue.add(request);
+            readyQueue.add(request);
 
             physicalMemory.printHeap();
             System.out.print("\n");
             pageTable.printPageTable();
         }
 
-    }
+    }*/
 
-    /*private void allocateVariable(Request request) {
+
+    /*public void allocateVariable(Request request) {//Long-Term Scheduler
         int sizeInt = (request.getSizeB() + Integer.BYTES - 1) / Integer.BYTES;
         int pagesNeeded = (sizeInt + pageTable.getPageSizeInt() - 1) / pageTable.getPageSizeInt();
-        int[] allocatedFrames;
+
 
         synchronized (toMonitor) {
-            //encontra frames livres ou descobre que não há frames/espaço suficiente
-            allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
-            if (allocatedFrames == null) {
-                System.out.println("\nmemoria insuficiente! liberando...");
-                freeOldestRequests();
-                allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
+            int[] allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
 
-                if (allocatedFrames == null) {
-                    System.out.println("\nmemoria insuficiente! liberando... (segunda e ultima tentativa)");
+
+            while (allocatedFrames == null) {
+
+                if (isFreeing) {
+                    while(isFreeing) {
+                        //espera free
+                        try {
+                            toMonitor.wait();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            System.err.println("Thread interrompida: " + e.getMessage());
+                        }
+                        allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
+                    }
+                }
+                else {
+                    isFreeing = true;
+                    System.out.println("\nmemoria insuficiente! liberando...");
+                    if (count.get() != 0) {
+                        //espera threads à frente
+                        try {
+                            toMonitor.wait();//ultimo monitor adormecido
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            System.err.println("Thread interrompida: " + e.getMessage());
+                        }
+                    }
                     freeOldestRequests();
                     allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
                     if (allocatedFrames == null) {
                         throw new RuntimeException("falha ao alocar mesmo após liberar espaço na memória.");//custom
                     }
+                    isFreeing = false;
+                    //acorda os esperantes de free
+                    toMonitor.notifyAll();
                 }
             }
+
+
+            count.incrementAndGet();
+            mapPages(request, allocatedFrames);//encontra pages livres e faz mapeamento com os frames livres
+            physicalMemory.writeToHeap(request.getVariableId(), allocatedFrames, sizeInt, pageTable.getPageSizeInt());//escreve nos frames encontrados
+            readyQueue.add(request);
+
+            logAllocationRequest(request, sizeInt, pagesNeeded, pageTable.getPageSizeInt());
+            physicalMemory.printHeap();
+            //System.out.print("\n");
+            pageTable.printPageTable();
+
+            count.decrementAndGet();
+            if (count.get() == 0) {
+                //acorda o ultimo monitor adormecido
+                toMonitor.notifyAll();
+            }
         }
-
-        //encontra pages livres e faz mapeamento com os frames livres (MAP PAGES)
-        List<Integer> freePages = pageTable.findFreeVirtualPages(allocatedFrames.length);
-        System.out.println(freePages + " <- paginas livres encontradas para alocamento\n");
-        for (int i = 0; i < allocatedFrames.length; i++) {
-            //listas, paginas e frames, utilizados pela requisição
-            pageTable.map(freePages.get(i), allocatedFrames[i]);
-        }
-        request.setPagesAllocated(allocatedFrames.length);
-        request.setPagesAllocatedList(freePages);
-
-
-
-        logAllocationRequest(request, sizeInt, pagesNeeded, pageTable.getPageSizeInt());
-        physicalMemory.writeToHeap(request.getVariableId(), allocatedFrames, sizeInt, pageTable.getPageSizeInt());//escreve nos frames encontrados
-        allocatedRequestsQueue.add(request);
-
-        physicalMemory.printHeap();
-        System.out.print("\n");
-        pageTable.printPageTable();
     }*/
+
+
+    public void allocateVariable(Request request) {//Long-Term Scheduler
+        int sizeInt = (request.getSizeB() + Integer.BYTES - 1) / Integer.BYTES;
+        int pagesNeeded = (sizeInt + pageTable.getPageSizeInt() - 1) / pageTable.getPageSizeInt();
+
+        int[] allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
+        //happy flow - há espaço na mem (não deve executar junto com freeOldestRequests)
+        if (allocatedFrames != null) {
+            finishAllocation(request, sizeInt, pagesNeeded, allocatedFrames);
+            return;
+        }
+
+        //bad flow - não houve espaço, freeOldestRequests [seção crítica], será acionado pelo menos 1 vez
+        try {
+            lockForFreeding.acquire();
+            allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);//para threads que chegam depois (liberadas)
+
+            if (allocatedFrames == null) {
+                System.out.println("\nmemoria insuficiente! liberando...");
+                freeOldestRequests();
+                allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
+                if (allocatedFrames == null) {
+                    throw new RuntimeException("falha ao alocar mesmo após liberar espaço na memória.");//custom
+                }
+            }
+            finishAllocation(request, sizeInt, pagesNeeded, allocatedFrames);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("Thread interrompida: " + e.getMessage());
+        } finally {
+            lockForFreeding.release();
+        }
+
+    }
+
+
+    private void finishAllocation(Request request, int sizeInt, int pagesNeeded, int[] frames) {
+        mapPages(request, frames);//encontra pages livres e faz mapeamento com os frames livres
+        physicalMemory.writeToHeap(
+                request.getVariableId(),
+                frames,
+                sizeInt,
+                pageTable.getPageSizeInt()
+        );
+        readyQueue.add(request);
+
+        synchronized (toMonitor) {
+            logAllocationRequest(request, sizeInt, pagesNeeded, pageTable.getPageSizeInt());
+            physicalMemory.printHeap();
+            System.out.println();
+            pageTable.printPageTable();
+        }
+    }
 
 
     //atualiza pageTable (mapeia páginas -> frames)
@@ -161,6 +234,7 @@ public class MemoryManager {
         request.setPagesAllocated(allocatedFrames.length);
         request.setPagesAllocatedList(freePages);
     }
+
 
     public void loadRequestsFromFile(String filePath) {
         try (BufferedReader reader = new BufferedReader( new FileReader(filePath) )) {
@@ -192,7 +266,7 @@ public class MemoryManager {
         System.out.print("informar tamanho da page (Bytes): ");
         int pageSizeB = 64;
         System.out.print("informar quantidade de requests: ");
-        int quantity = 1000;
+        int quantity = 5;
         System.out.print("informar tamanho (Bytes) mínimo das requests: ");
         int min = 4;
         System.out.print("informar tamanho (Bytes) máximo das requests: ");
@@ -202,13 +276,13 @@ public class MemoryManager {
         PageTable pageTable = new PageTable(heapSizeKB, pageSizeB);
         MemoryManager simulator = new MemoryManager(physicalMemory, pageTable);
         RequestGenerator generator = new RequestGenerator(min, max);//informa limite de tamanho (B) mínimo e máximo de requests
+
         RequestProducerConsumer pc = new RequestProducerConsumer();
 
 
-
         long startTime = System.nanoTime();
-
         ///SEQUENTIAL
+
         //teste semi-automático
         /*for(int x = 0; x < quantity; x++){
             simulator.allocateVariable( generator.generateRequest() );
@@ -224,27 +298,28 @@ public class MemoryManager {
         //simulator.loadRequestsFromFile("C:\\dev\\requests_converted.txt");//teste automático
 
 
-
         ///PARALLELISM (PRODUCER-CONSUMER)
 
-        //producer (3 options):
-        System.out.print("INICIA PRODUTOR");
-        pc.readerProducer("C:\\dev\\requests_converted.txt");
+        ///producer (3 options):
+        //System.out.print("INICIA PRODUTOR");
+        //pc.readerProducer("C:\\dev\\requests_converted.txt");
         //pc.randomProducer(quantity, generator);
-        //pc.testProducer();
-        System.out.print("INICIA FREE");
+        pc.testProducer();
+
+        //System.out.print("INICIA FREE");
         //free em paralelo
-        pc.cleaner(simulator);
+        //pc.cleaner(simulator);
+
+        ///consumers:
         System.out.print("INICIA CONSUMIDOR");
-        //consumers:
         pc.consumer(simulator);
 
-        //encerrar consumidores:
+        ///encerrar consumidores:
         System.out.print("ENCERRA PRODUTOR-CONSUMIDOR");
         pc.shutdownThreads();
-        System.out.print("ENCERRA FREE");
-        pc.stopCleaner();
 
+        //System.out.print("ENCERRA FREE");
+        //pc.stopCleaner();
 
 
         ///REPORT

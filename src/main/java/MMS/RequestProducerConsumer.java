@@ -13,7 +13,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 
 public class RequestProducerConsumer {
-    private final BlockingQueue<Request> waitingRequestsQueue = new LinkedBlockingQueue<>();//buffer
+    private final BlockingQueue<Request> jobQueue = new LinkedBlockingQueue<>();//buffer
 
     private final int numThreads = Runtime.getRuntime().availableProcessors();
     private final ExecutorService exec = Executors.newFixedThreadPool( numThreads );
@@ -25,7 +25,7 @@ public class RequestProducerConsumer {
     private void addPoisonPills() {
         for (int i = 0; i < numThreads; i++) {
             try {
-                waitingRequestsQueue.put(new Request(-1, -1));
+                jobQueue.put(new Request(-1, -1));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -44,7 +44,7 @@ public class RequestProducerConsumer {
                     if (parts.length >= 2) {
                         int a = Integer.parseInt(parts[0].trim());
                         int b = Integer.parseInt(parts[1].trim());
-                        waitingRequestsQueue.put(new Request(a, b));
+                        jobQueue.put(new Request(a, b));
                     }
 
                 }
@@ -60,7 +60,7 @@ public class RequestProducerConsumer {
         exec.submit(() -> {
             try {
                 for (int x = 0; x < quantity; x++) {
-                    waitingRequestsQueue.put(generator.generateRequest());
+                    jobQueue.put(generator.generateRequest());
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -74,11 +74,11 @@ public class RequestProducerConsumer {
     public void testProducer() {
         exec.submit(() -> {
             try {
-                waitingRequestsQueue.put(new Request(1, 512));
-                waitingRequestsQueue.put(new Request(2, 388));
-                waitingRequestsQueue.put(new Request(3, 230));
-                waitingRequestsQueue.put(new Request(4, 256));
-                waitingRequestsQueue.put(new Request(5, 530));
+                jobQueue.put(new Request(1, 512));
+                jobQueue.put(new Request(2, 388));
+                jobQueue.put(new Request(3, 230));
+                jobQueue.put(new Request(4, 256));
+                jobQueue.put(new Request(5, 530));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 System.err.println("Thread interrompida: " + e.getMessage());
@@ -94,7 +94,7 @@ public class RequestProducerConsumer {
             exec.submit(() -> {
                 try {
                     while (true) {
-                        Request req = waitingRequestsQueue.take();
+                        Request req = jobQueue.take();
                         if (req.getSizeB() == -1) return;
                         simulator.allocateVariable(req);
                     }

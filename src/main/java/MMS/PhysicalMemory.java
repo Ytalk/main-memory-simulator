@@ -7,6 +7,7 @@ import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 
 public class PhysicalMemory {
@@ -20,9 +21,9 @@ public class PhysicalMemory {
     private final int heapSizeB;
     private final int heapSizeInt;
 
-    //private final BitSet freeFrames;
     private final ConcurrentLinkedQueue<Integer> freeFramesQueue = new ConcurrentLinkedQueue<>();
     private final Striped<Lock> frameLocks;
+    private Lock lock = new ReentrantLock();
 
     public PhysicalMemory(int heapSizeKB, int frameSizeB) {//heap e page
         this.heapSizeKB = heapSizeKB;
@@ -41,7 +42,6 @@ public class PhysicalMemory {
     }
 
     private void initializeFrames() {
-        //freeFrames.set(0, numFrames);
         for (int i = 0; i < numFrames; i++) {
             frames[i] = new Frame(i);
             freeFramesQueue.add(i);
@@ -49,45 +49,26 @@ public class PhysicalMemory {
     }
 
     //para alocar frames (contíguos ou espalhados)
-    /*public int[] findFreePhysicalFrames(int pagesNeeded) {
-        allocationLock.lock();
-        try {
-            int[] freeFramesFound = new int[pagesNeeded];
-            int found = 0;
-
-            //first-fit in non-contiguous allocation
-            int start = freeFrames.nextSetBit(0);
-            while (start != -1 && found < pagesNeeded) {
-                freeFramesFound[found++] = start;
-                freeFrames.clear(start);
-                start = freeFrames.nextSetBit(start + 1);
-            }
-
-            if (found == pagesNeeded) return freeFramesFound;
-
-            //rollback if not enough frames
-            for (int i = 0; i < found; i++) {
-                freeFrames.set(freeFramesFound[i]);
-            }
-            return null;
-        } finally {
-            allocationLock.unlock();
-        }
-    }*/
     public int[] findFreePhysicalFrames(int pagesNeeded) {
         int[] freeFramesFound = new int[pagesNeeded];
-        for (int i = 0; i < pagesNeeded; i++) {
-            Integer frame = freeFramesQueue.poll();
-            if (frame == null) {
-                //rollback dos frames já alocados
-                for (int j = 0; j < i; j++) {
-                    freeFramesQueue.add(freeFramesFound[j]);
+
+        lock.lock();
+        try {
+            for (int i = 0; i < pagesNeeded; i++) {
+                Integer frame = freeFramesQueue.poll();
+                if (frame == null) {
+                    //rollback dos frames já alocados
+                    for (int j = 0; j < i; j++) {
+                        freeFramesQueue.add(freeFramesFound[j]);
+                    }
+                    return null;
                 }
-                return null;
+                freeFramesFound[i] = frame;
             }
-            freeFramesFound[i] = frame;
+            return freeFramesFound;
+        } finally {
+            lock.unlock();
         }
-        return freeFramesFound;
     }
 
     //batch write com Arrays
@@ -118,7 +99,6 @@ public class PhysicalMemory {
         Lock lock = frameLocks.get(frame);
         lock.lock();
         try {
-            //freeFrames.set(frame);
             //(page 16int) = 0...15 (16num); 16...31 (16num); 32...47 (16 num).... end = start + frameSizeInt
             Arrays.fill(heap, frame * frameSizeInt, (frame + 1) * frameSizeInt, 0);
         } finally {

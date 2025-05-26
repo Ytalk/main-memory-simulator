@@ -1,12 +1,17 @@
 package MMS;
 
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalListener;
+import com.google.common.cache.RemovalNotification;
 import com.google.common.util.concurrent.Striped;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -20,12 +25,30 @@ public class PageTable {
     private final int pageSizeInt;
     private final int numPages;
 
+    // TLB: small cache of virtual -> physical mappings
+    //private final Cache<Integer, Integer> tlb;
+
     public PageTable(int heapSizeKB, int pageSizeB) {
         this.pageSizeB = pageSizeB;
         this.pageSizeInt = pageSizeB / 4;
         this.numPages = (heapSizeKB * 1024) / pageSizeB;
         this.entries = new PageTableEntry[numPages];
         pageLocks = Striped.lock(numPages);
+
+        // build a TLB with maximum size and optional expiration
+        /*this.tlb = CacheBuilder.newBuilder()
+                .maximumSize(numPages/8)
+                .concurrencyLevel(4)
+                .expireAfterAccess(2, TimeUnit.SECONDS)
+                .removalListener(new RemovalListener<Integer, Integer>() {
+                    @Override
+                    public void onRemoval(RemovalNotification<Integer, Integer> notification) {
+                        // optional: log evictions
+                        // System.out.println("TLB evicted: page " + notification.getKey());
+                    }
+                })
+                .build();*/
+
         initializeEntries();
     }
 
@@ -50,6 +73,7 @@ public class PageTable {
         try {
             //entries[virtualPage].setPhysicalFrame(physicalFrame);
             entries[virtualPage] = new PageTableEntry(physicalFrame);
+            //tlb.put(virtualPage, physicalFrame);
         } finally {
             lock.unlock();
         }
@@ -61,6 +85,7 @@ public class PageTable {
         try {
             entries[virtualPage].setPhysicalFrame(-1);
             freePagesQueue.add(virtualPage);
+            //tlb.invalidate(virtualPage);
         } finally {
             lock.unlock();
         }
@@ -70,6 +95,11 @@ public class PageTable {
         Lock lock = pageLocks.get(virtualPage);//read
         lock.lock();
         try {
+            /*boolean present = entries[virtualPage].getPhysicalFrame() != -1;
+            if (present) {
+                tlb.put(virtualPage, entries[virtualPage].getPhysicalFrame());
+            }*/
+
             return entries[virtualPage].getPhysicalFrame() != -1;
         } finally {
             lock.unlock();
@@ -78,9 +108,20 @@ public class PageTable {
 
     //retorna o frame associado com a página
     public int getPhysicalFrame(int virtualPage) {
+        // Primeiro verifica a TLB
+        /*Integer frame = tlb.getIfPresent(virtualPage);
+        if (frame != null) {
+            return frame;
+        }*/
+
         Lock lock = pageLocks.get(virtualPage);//read
         lock.lock();
         try {
+            //int pf = entries[virtualPage].getPhysicalFrame();
+            // populate TLB on access
+            /*if (pf != -1) {
+                tlb.put(virtualPage, pf);
+            }*/
             return entries[virtualPage].getPhysicalFrame();
         } finally {
             lock.unlock();
