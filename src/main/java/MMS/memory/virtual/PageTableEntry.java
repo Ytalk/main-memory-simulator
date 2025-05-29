@@ -1,4 +1,4 @@
-package MMS;
+package MMS.memory.virtual;
 
 public class PageTableEntry {
     private volatile int frame;//número do frame (-1 se não mapeado)

@@ -1,4 +1,4 @@
-package MMS;
+package MMS.memory.physical;
 
 public class Frame {
     private final int indexFrame;

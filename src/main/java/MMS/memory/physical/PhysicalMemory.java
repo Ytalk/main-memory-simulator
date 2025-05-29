@@ -1,10 +1,8 @@
-package MMS;
+package MMS.memory.physical;
 
 import com.google.common.util.concurrent.Striped;
 
 import java.util.Arrays;
-import java.util.BitSet;
-import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -22,7 +20,7 @@ public class PhysicalMemory {
     private final int heapSizeInt;
 
     private final ConcurrentLinkedQueue<Integer> freeFramesQueue = new ConcurrentLinkedQueue<>();
-    private final Striped<Lock> frameLocks;
+    //private final Striped<Lock> frameLocks;
     private Lock lock = new ReentrantLock();
 
     public PhysicalMemory(int heapSizeKB, int frameSizeB) {//heap e page
@@ -36,8 +34,7 @@ public class PhysicalMemory {
         this.numFrames = heapSizeB / frameSizeB;
         this.frames = new Frame[numFrames];
 
-        //this.freeFrames = new BitSet(numFrames);
-        this.frameLocks = Striped.lock(numFrames);
+        //this.frameLocks = Striped.lock(numFrames);
         initializeFrames();
     }
 
@@ -52,10 +49,11 @@ public class PhysicalMemory {
     public int[] findFreePhysicalFrames(int pagesNeeded) {
         int[] freeFramesFound = new int[pagesNeeded];
 
-        lock.lock();
-        try {
+        //lock.lock();
+        //try {
             for (int i = 0; i < pagesNeeded; i++) {
                 Integer frame = freeFramesQueue.poll();
+
                 if (frame == null) {
                     //rollback dos frames já alocados
                     for (int j = 0; j < i; j++) {
@@ -63,47 +61,41 @@ public class PhysicalMemory {
                     }
                     return null;
                 }
+
                 freeFramesFound[i] = frame;
             }
             return freeFramesFound;
-        } finally {
-            lock.unlock();
-        }
+        //} finally { lock.unlock(); }
     }
 
     //batch write com Arrays
-    public void writeToHeap(int variableId, int[] frames, int intsNeeded, int pageSizeInts) {
+    public void writeToHeap(int variableId, int[] frames, int intsNeeded) {
         int remaining = intsNeeded;
         for (int frameIndex : frames) {
-            int toWrite = Math.min(remaining, pageSizeInts);
+            int toWrite = Math.min(remaining, frameSizeInt);//vai até uma parte (fragmentação) ou final do frame
+            int start = frameIndex * frameSizeInt;
+            int end = start + toWrite;
 
-            Lock lock = frameLocks.get(frameIndex);
-            lock.lock();
-            try {
-                int start = frameIndex * frameSizeInt;
-                //vai até uma parte (fragmentação) ou final do frame
-                int end = Math.min(start + toWrite, start + frameSizeInt);
+            //Lock lock = frameLocks.get(frameIndex);
+            //lock.lock();
+            //try {
                 Arrays.fill(heap, start, end, variableId);
-            } finally {
-                lock.unlock();
-            }
-
+            //} finally { lock.unlock(); }
             remaining -= toWrite;
         }
     }
 
-    //limpa heap associado a esse frame (abordagem hybrid para não sobreescrever 0 [fragmentação]?)
+    //limpa região da heap associado a esse frame (IDEIA [em média trade-off caro]: abordagem hybrid para não sobreescrever 0 [fragmentação])
     public void freeFrame(int frame) {
-        //(frame >= 0 && frame < numFrames)
         freeFramesQueue.add(frame);
-        Lock lock = frameLocks.get(frame);
-        lock.lock();
-        try {
+        //Lock lock = frameLocks.get(frame);
+        //lock.lock();
+        //try {
             //(page 16int) = 0...15 (16num); 16...31 (16num); 32...47 (16 num).... end = start + frameSizeInt
             Arrays.fill(heap, frame * frameSizeInt, (frame + 1) * frameSizeInt, 0);
-        } finally {
+        /*} finally {
             lock.unlock();
-        }
+        }*/
     }
 
 

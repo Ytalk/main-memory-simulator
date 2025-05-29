@@ -1,4 +1,6 @@
-package MMS;
+package MMS.process;
+
+import MMS.memory.manager.MemoryManager;
 
 import java.io.BufferedReader;
 import java.io.FileReader;

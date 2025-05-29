@@ -1,4 +1,4 @@
-package MMS;
+package MMS.process;
 
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
