@@ -32,4 +32,8 @@ public class RequestGenerator {
         totalRandomSizeB.addAndGet(RandomSizeB);
         return RandomSizeB;
     }
+
+    public void reset(){
+        idGenerator.set(1);
+    }
 }

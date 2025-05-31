@@ -1,5 +1,6 @@
 package MMS.memory.manager;
 
+import MMS.PerformanceChartGenerator;
 import MMS.memory.physical.PhysicalMemory;
 import MMS.memory.virtual.PageTable;
 
@@ -14,26 +15,36 @@ import java.util.Scanner;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
 
 public class MemoryManager {
     private final PhysicalMemory physicalMemory;
     private final PageTable pageTable;
+    private final RequestProducerConsumer producerConsumer = new RequestProducerConsumer();
+    private final RequestGenerator requestGenerator;
 
     private final ConcurrentLinkedQueue<Request> readyQueue = new ConcurrentLinkedQueue();
-
-    boolean isFreeing;
-    private final Object toMonitor = new Object();
     private final Semaphore lockForFreeding = new Semaphore(1);
+    private final Object toMonitor = new Object();
 
-    private static AtomicInteger totalFreedRequests = new AtomicInteger(0);
+    private static int totalFreedRequests = 0;
+    private static int totalCallsToFreeOldest = 0;
 
 
-    private MemoryManager(PhysicalMemory physicalMemory, PageTable PageTable) {
+    private static Scanner scanner = new Scanner(System.in);
+    private static int heapSizeKB = 2;
+    private static int pageSizeB = 64;
+    private static int quantity = 1000;
+    private static int minSize = 4;
+    private static int maxSize = 256;
+    private static String outputPath = "chart.png";
+
+    private MemoryManager(PhysicalMemory physicalMemory, PageTable PageTable,
+                          RequestGenerator requestGenerator) {
         this.physicalMemory = physicalMemory;
         this.pageTable = PageTable;
+        this.requestGenerator = requestGenerator;
     }
-
 
     private void logAllocationRequest(Request req, int ints, int pages, int pageSizeInts) {
         //o espaço utilizado na memória é o tamanho requisição, mas o espaço consumido é maior ou igual (deve ser múltiplo do tamanho da página)
@@ -67,11 +78,13 @@ public class MemoryManager {
         int targetFreed = (int) Math.ceil(physicalMemory.getNumFrames() * 0.3);
         System.out.println("precisa liberar pelo menos " + targetFreed + " frames (30% da heap)");
 
+        totalCallsToFreeOldest++;
+
         int freedFrames = 0;
         while (freedFrames < targetFreed && !readyQueue.isEmpty()) {//acumula requests até bater o número de frames alvo ou mais (30%+)
             Request oldest = readyQueue.poll();
             freedFrames += oldest.getPagesUsedNum();
-            totalFreedRequests.incrementAndGet();//total de variáveis removidas da heap
+            totalFreedRequests++;//total de variáveis removidas da heap
 
             for (int virtualPage : oldest.getPagesUsedList()) {//desmapeia todas as páginas da requisição e desaloca da memória
                 int physicalFrame = pageTable.getPhysicalFrame(virtualPage);
@@ -193,12 +206,12 @@ public class MemoryManager {
         physicalMemory.writeToHeap(request.getVariableId(), frames, sizeInt);
         readyQueue.add(request);
 
-        synchronized (toMonitor) {
+        /*synchronized (toMonitor) {
             logAllocationRequest(request, sizeInt, pagesNeeded, pageTable.getPageSizeInt());
             physicalMemory.printHeap();
             System.out.println();
             pageTable.printPageTable();
-        }
+        }*/
     }
 
 
@@ -239,78 +252,155 @@ public class MemoryManager {
 
 
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);//user informa tamanho da heap (KB) e page (B) - size/pageSize=numPages
+        MemoryManager simulator = configureParameters();
 
-        System.out.print("informar tamanho da Heap (KB): ");
-        int heapSizeKB = 1;
-        System.out.print("informar tamanho da page (Bytes): ");
-        int pageSizeB = 64;
-        System.out.print("informar quantidade de requests: ");
-        int quantity = 5;
-        System.out.print("informar tamanho (Bytes) mínimo das requests: ");
-        int min = 4;
-        System.out.print("informar tamanho (Bytes) máximo das requests: ");
-        int max = 256;
+        int option;
+        do {
+            showMenu();
+            option = readInt("Escolha uma opção: ");
+            switch (option) {
+                case 0://case teste
+                    simulator.allocateVariable( new Request(1, 512) );
+                    simulator.allocateVariable( new Request(2, 388) );
+                    simulator.allocateVariable( new Request(3, 230) );
+                    simulator.allocateVariable( new Request(4, 256) );
+                    simulator.allocateVariable( new Request(5, 530) );
+                    simulator.reset();
+                    break;
+                case 1:
+                    configureParameters();
+                    break;
+                case 2:
+                    runSequentialFile(simulator);
+                    break;
+                case 3:
+                    runParallelFile(simulator);
+                    break;
+                case 4:
+                    runComparison(simulator);
+                    break;
+                case 5:
+                    System.out.println("Saindo...");
+                    break;
+                default:
+                    System.out.println("Opção inválida. Tente novamente.");
+            }
+        } while (option != 5);
+        scanner.close();
+    }
+
+
+    private static void showMenu() {
+        System.out.println("\n=== Menu do MemoryManager ===");
+        System.out.println("1. Configurar parâmetros");
+        System.out.println("2. Executar modo sequencial");
+        System.out.println("3. Executar modo paralelo");
+        System.out.println("4. Comparar sequencial vs paralelo e exportar gráfico");
+        System.out.println("5. Sair");
+    }
+
+    private static MemoryManager configureParameters() {
+        heapSizeKB = readInt("Tamanho da Heap (KB): ");
+        pageSizeB = readInt("Tamanho da Página (Bytes): ");
+        quantity = readInt("Quantidade de requests: ");
+        minSize = readInt("Tamanho mínimo das requests (Bytes): ");
+        maxSize = readInt("Tamanho máximo das requests (Bytes): ");
 
         PhysicalMemory physicalMemory = new PhysicalMemory(heapSizeKB, pageSizeB);
         PageTable pageTable = new PageTable(heapSizeKB, pageSizeB);
-        MemoryManager simulator = new MemoryManager(physicalMemory, pageTable);
-        RequestGenerator generator = new RequestGenerator(min, max);//informa limite de tamanho (B) mínimo e máximo de requests
+        RequestGenerator requestGenerator = new RequestGenerator(minSize, maxSize);//informa limite de tamanho (B) mínimo e máximo de requests
+        return new MemoryManager(physicalMemory, pageTable, requestGenerator);
+    }
 
-        RequestProducerConsumer pc = new RequestProducerConsumer();
+    private static int readInt(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            try {
+                return Integer.parseInt(scanner.nextLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.println("Entrada inválida. Digite um número inteiro.");
+            }
+        }
+    }
 
 
+    private static double runSequentialFile(MemoryManager simulator) {
+        System.out.println("\n-- Execução Sequencial --");
         long startTime = System.nanoTime();
-        ///SEQUENTIAL
-
-        //teste semi-automático
-        /*for(int x = 0; x < quantity; x++){
-            simulator.allocateVariable( generator.generateRequest() );
-        }*/
-
-        //page e fragmentação (teste manual)
-        /*simulator.allocateVariable( new Request(1, 512) );
-        simulator.allocateVariable( new Request(2, 388) );
-        simulator.allocateVariable( new Request(3, 230) );
-        simulator.allocateVariable( new Request(4, 256) );
-        simulator.allocateVariable( new Request(5, 530) );*/
-
-        //simulator.loadRequestsFromFile("C:\\dev\\requests_converted.txt");//teste automático
-
-
-        ///PARALLELISM (PRODUCER-CONSUMER)
-
-        ///producer (3 options):
-        //System.out.print("INICIA PRODUTOR");
-        //pc.readerProducer("C:\\dev\\requests_converted.txt");
-        //pc.randomProducer(quantity, generator);
-        pc.testProducer();
-
-        //System.out.print("INICIA FREE");
-        //free em paralelo
-        //pc.cleaner(simulator);
-
-        ///consumers:
-        System.out.print("INICIA CONSUMIDOR");
-        pc.consumer(simulator);
-
-        ///encerrar consumidores:
-        System.out.print("ENCERRA PRODUTOR-CONSUMIDOR");
-        pc.shutdownThreads();
-
-        //System.out.print("ENCERRA FREE");
-        //pc.stopCleaner();
-
-
-        ///REPORT
+        simulator.loadRequestsFromFile("C:\\dev\\requests_converted.txt");
         long endTime = System.nanoTime();
         double runtimeMS = (endTime - startTime) / 1_000_000.0;
 
-        System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
-        //double AverageRequestSizeB = (double) generator.getTotalRandomSizeB() / quantidade;
-        //System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
+        System.out.printf("Tempo Sequencial: %.2f ms\n", runtimeMS);
         System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
-        System.out.println("tempo total de execucao da memoria em MS: " + runtimeMS);
+        //System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
+        //double AverageRequestSizeB = (double) TotalSizeB / quantity; pegar ambas do file
+        //System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
+        simulator.reset();
+        return runtimeMS;
+    }
+
+    private static double runSequentialRandom(MemoryManager simulator) {
+        System.out.println("\n-- Execução Sequencial Random--");
+        long startTime = System.nanoTime();
+        for(int x = 0; x < quantity; x++){
+            simulator.allocateVariable( simulator.requestGenerator.generateRequest() );
+        }
+        long endTime = System.nanoTime();
+        double runtimeMS = (endTime - startTime) / 1_000_000.0;
+
+        System.out.printf("Tempo Sequencial: %.2f ms\n", runtimeMS);
+        System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
+        System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
+        double AverageRequestSizeB = (double) simulator.requestGenerator.getTotalRandomSizeB() / quantity;
+        System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
+        simulator.reset();
+        return runtimeMS;
+    }
+
+
+    private static double runParallelFile(MemoryManager simulator) {
+        System.out.println("\n-- Execução Paralela --");
+
+        long startTime = System.nanoTime();
+        simulator.producerConsumer.readerProducer("C:\\dev\\requests_converted.txt");
+        simulator.producerConsumer.consumer(simulator);
+        long endTime = System.nanoTime();
+
+        double runtimeMS = (endTime - startTime) / 1_000_000.0;
+        System.out.printf("Tempo Paralelo: %.2f ms\n", runtimeMS);
+        System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
+        //System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
+        //double AverageRequestSizeB = (double) TotalSizeB / quantity; pegar ambas do file
+        //System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
+        simulator.reset();
+        return runtimeMS;
+    }
+
+
+    private static void runComparison(MemoryManager simulator) {
+        System.out.println("\n-- Comparação e Exportação de Gráfico --");
+
+        double seqTime = runSequentialFile(simulator);
+        double parTime = runParallelFile(simulator);
+
+        System.out.printf("Sequencial: %.2f ms | Paralelo: %.2f ms\n", seqTime, parTime);
+        try {
+            PerformanceChartGenerator.exportComparisonChart(seqTime, parTime, outputPath);
+        } catch (IOException e) {
+            System.err.println("Erro ao exportar gráfico: " + e.getMessage());
+        }
+    }
+
+    public void reset() {
+        readyQueue.clear();
+        totalFreedRequests = 0;
+        totalCallsToFreeOldest = 0;
+
+        physicalMemory.reset();//
+        pageTable.reset();///
+        producerConsumer.reset();
+        requestGenerator.reset();
     }
 
 }

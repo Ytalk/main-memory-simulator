@@ -4,9 +4,6 @@ import com.google.common.util.concurrent.Striped;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
 
 public class PhysicalMemory {
     private Frame[] frames;
@@ -21,7 +18,7 @@ public class PhysicalMemory {
 
     private final ConcurrentLinkedQueue<Integer> freeFramesQueue = new ConcurrentLinkedQueue<>();
     //private final Striped<Lock> frameLocks;
-    private Lock lock = new ReentrantLock();
+    //private Lock lock = new ReentrantLock();
 
     public PhysicalMemory(int heapSizeKB, int frameSizeB) {//heap e page
         this.heapSizeKB = heapSizeKB;
@@ -120,4 +117,11 @@ public class PhysicalMemory {
             System.out.println("index: " + i + " | ID da variavel(0 se nao houver): " + heap[i]);
         }
     }
+
+    public void reset(){
+        freeFramesQueue.clear();
+        Arrays.fill(heap, 0);
+        initializeFrames();
+    }
+
 }

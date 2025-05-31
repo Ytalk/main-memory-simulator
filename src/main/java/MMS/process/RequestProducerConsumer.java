@@ -15,14 +15,28 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 
 public class RequestProducerConsumer {
-    private final BlockingQueue<Request> jobQueue = new LinkedBlockingQueue<>();//buffer
+    private BlockingQueue<Request> jobQueue;//buffer
 
     private final int numThreads = Runtime.getRuntime().availableProcessors();
-    private final ExecutorService exec = Executors.newFixedThreadPool( numThreads );
+    private ExecutorService exec;
     //private final ExecutorService exec = Executors.newWorkStealingPool();
 
     ScheduledExecutorService execFree = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> cleaner;
+
+
+    public RequestProducerConsumer() {
+        init();
+    }
+
+    private void init() {
+        exec = Executors.newFixedThreadPool(numThreads);
+        jobQueue = new LinkedBlockingQueue<>();
+    }
+
+
+
+
 
     private void addPoisonPills() {
         for (int i = 0; i < numThreads; i++) {
@@ -107,7 +121,7 @@ public class RequestProducerConsumer {
         }
     }
 
-    public void shutdownThreads(){
+    private void shutdownThreads(){
         exec.shutdown();
         try {
             exec.awaitTermination(1, TimeUnit.MINUTES);
@@ -115,6 +129,13 @@ public class RequestProducerConsumer {
             Thread.currentThread().interrupt();
         }
     }
+
+    public void reset() {
+        shutdownThreads();
+        //jobQueue.clear();
+        init();
+    }
+
 
     public void cleaner(MemoryManager simulator) {
         cleaner = execFree.scheduleWithFixedDelay(() -> simulator.freeOldestRequests(), 2, 2, TimeUnit.SECONDS);
@@ -126,5 +147,4 @@ public class RequestProducerConsumer {
         }
         execFree.shutdown();
     }
-
 }

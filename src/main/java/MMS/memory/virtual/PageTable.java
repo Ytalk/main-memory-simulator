@@ -4,21 +4,14 @@ import com.google.common.util.concurrent.Striped;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class PageTable {
     private PageTableEntry[] entries;//index (página virtual) -> value (frame físico)
-    //private Striped<Lock> pageLocks;
-    private Lock lock = new ReentrantLock();
     private final ConcurrentLinkedQueue<Integer> freePagesQueue = new ConcurrentLinkedQueue<>();
 
     private final int pageSizeB;
     private final int pageSizeInt;
     private final int numPages;
-
-    // TLB: small cache of virtual -> physical mappings
-    //private final Cache<Integer, Integer> tlb;
 
     public PageTable(int heapSizeKB, int pageSizeB) {
         this.pageSizeB = pageSizeB;
@@ -116,5 +109,10 @@ public class PageTable {
             System.out.println("index(page): " + i + " value(frame/-1 se nao mapeado): " + entries[i].getPhysicalFrame());
         }
     }
+
+     public void reset(){
+        freePagesQueue.clear();
+        initializeEntries();
+     }
 
 }
