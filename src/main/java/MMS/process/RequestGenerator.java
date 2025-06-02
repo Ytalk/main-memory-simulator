@@ -35,5 +35,6 @@ public class RequestGenerator {
 
     public void reset(){
         idGenerator.set(1);
+        totalRandomSizeB.set(0);
     }
 }

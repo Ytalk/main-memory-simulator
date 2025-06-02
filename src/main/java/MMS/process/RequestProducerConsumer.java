@@ -7,37 +7,42 @@ import java.io.FileReader;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 
 public class RequestProducerConsumer {
     private BlockingQueue<Request> jobQueue;//buffer
-
-    private final int numThreads = Runtime.getRuntime().availableProcessors();
+    private int numThreads;
     private ExecutorService exec;
     //private final ExecutorService exec = Executors.newWorkStealingPool();
-
-    ScheduledExecutorService execFree = Executors.newSingleThreadScheduledExecutor();
-    private ScheduledFuture<?> cleaner;
-
 
     public RequestProducerConsumer() {
         init();
     }
 
     private void init() {
+        numThreads = Runtime.getRuntime().availableProcessors();
         exec = Executors.newFixedThreadPool(numThreads);
         jobQueue = new LinkedBlockingQueue<>();
     }
 
+    public void shutdownThreads() {
+        exec.shutdown();
+        try {
+            if (!exec.awaitTermination(5, TimeUnit.SECONDS)) {
+                exec.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            exec.shutdownNow();
+        }
+    }
 
+    public void reset() {
+        init();
+    }
 
-
-
+    //indica aos consumidores que o produtor terminou. quando um consumidor (thread) pega uma poison pill, ele encerra sua execução
     private void addPoisonPills() {
         for (int i = 0; i < numThreads; i++) {
             try {
@@ -51,6 +56,16 @@ public class RequestProducerConsumer {
     public void readerProducer(String filePath) {
         exec.submit(() -> {
             try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+                /*String firstLine = reader.readLine();
+                if (firstLine != null) {
+                    String[] header = firstLine.trim().split(",");
+                    if (header.length == 3) {
+                        int totalRequests = Integer.parseInt(header[0].trim());
+                        int minSize = Integer.parseInt(header[1].trim());
+                        int maxSize = Integer.parseInt(header[2].trim());
+                    }
+                }*/
+
                 String line;
                 while ((line = reader.readLine()) != null) {
                     line = line.trim();
@@ -121,30 +136,4 @@ public class RequestProducerConsumer {
         }
     }
 
-    private void shutdownThreads(){
-        exec.shutdown();
-        try {
-            exec.awaitTermination(1, TimeUnit.MINUTES);
-        } catch (InterruptedException e){
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    public void reset() {
-        shutdownThreads();
-        //jobQueue.clear();
-        init();
-    }
-
-
-    public void cleaner(MemoryManager simulator) {
-        cleaner = execFree.scheduleWithFixedDelay(() -> simulator.freeOldestRequests(), 2, 2, TimeUnit.SECONDS);
-    }
-
-    public void stopCleaner() {
-        if (cleaner != null) {
-            cleaner.cancel(true);
-        }
-        execFree.shutdown();
-    }
 }

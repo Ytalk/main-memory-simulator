@@ -21,7 +21,7 @@ public class MemoryManager {
     private final PhysicalMemory physicalMemory;
     private final PageTable pageTable;
     private final RequestProducerConsumer producerConsumer = new RequestProducerConsumer();
-    private final RequestGenerator requestGenerator;
+    private static RequestGenerator requestGenerator;
 
     private final ConcurrentLinkedQueue<Request> readyQueue = new ConcurrentLinkedQueue();
     private final Semaphore lockForFreeding = new Semaphore(1);
@@ -32,11 +32,11 @@ public class MemoryManager {
 
 
     private static Scanner scanner = new Scanner(System.in);
-    private static int heapSizeKB = 2;
-    private static int pageSizeB = 64;
-    private static int quantity = 1000;
-    private static int minSize = 4;
-    private static int maxSize = 256;
+    private static int heapSizeKB;
+    private static int pageSizeB;
+    private static int quantity;
+    private static int minSize;
+    private static int maxSize;
     private static String outputPath = "chart.png";
 
     private MemoryManager(PhysicalMemory physicalMemory, PageTable PageTable,
@@ -56,12 +56,12 @@ public class MemoryManager {
     private int[] tryFindFreeFrames(int pagesNeeded) {
         int[] allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
         if (allocatedFrames == null) {
-            System.out.println("\nmemoria insuficiente! liberando...");
+            //System.out.println("\nmemoria insuficiente! liberando...");
             freeOldestRequests();
             allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
 
             if (allocatedFrames == null) {
-                System.out.println("\nmemoria insuficiente! liberando... (segunda e ultima tentativa)");
+                //System.out.println("\nmemoria insuficiente! liberando... (segunda e ultima tentativa)");
                 freeOldestRequests();
                 allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
                 if (allocatedFrames == null) {
@@ -76,9 +76,9 @@ public class MemoryManager {
     public void freeOldestRequests() {//Medium-Term Scheduler
         //aproximadamente 30% do tamanho total da heap (de acordo com o número de frames)
         int targetFreed = (int) Math.ceil(physicalMemory.getNumFrames() * 0.3);
-        System.out.println("precisa liberar pelo menos " + targetFreed + " frames (30% da heap)");
+        //System.out.println("precisa liberar pelo menos " + targetFreed + " frames (30% da heap)");
 
-        totalCallsToFreeOldest++;
+        //totalCallsToFreeOldest++;
 
         int freedFrames = 0;
         while (freedFrames < targetFreed && !readyQueue.isEmpty()) {//acumula requests até bater o número de frames alvo ou mais (30%+)
@@ -92,78 +92,11 @@ public class MemoryManager {
                 //libera da memória e tabela, atualiza as mesmas, além de atualizar as filas de livres
                 pageTable.unmap(virtualPage);
                 physicalMemory.freeFrame(physicalFrame);//atualiza freeFramesQueue com o parametro e zera o heap associado ao frame (numero e tamanho do frame)
-                System.out.println("desmapeado: pagina " + virtualPage + " -> frame " + physicalFrame);
+                //System.out.println("desmapeado: pagina " + virtualPage + " -> frame " + physicalFrame);
             }
-            System.out.println("liberado " + oldest.getPagesUsedNum() + " frames - variavel " + oldest.getVariableId());
+            //System.out.println("liberado " + oldest.getPagesUsedNum() + " frames - variavel " + oldest.getVariableId());
         }
-        //System.out.println("\ntotal liberado: " + freedFrames + " frames. | total de variaveis removidas ate agora: " + totalFreedRequests);
     }
-
-
-    /*public void allocateVariable(Request request) {//Long-Term Scheduler
-        int sizeInt = (request.getSizeB() + Integer.BYTES - 1) / Integer.BYTES;
-        int pagesNeeded = (sizeInt + pageTable.getPageSizeInt() - 1) / pageTable.getPageSizeInt();
-
-
-        synchronized (toMonitor) {
-            int[] allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
-
-
-            while (allocatedFrames == null) {
-
-                if (isFreeing) {
-                    while(isFreeing) {
-                        //espera free
-                        try {
-                            toMonitor.wait();
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            System.err.println("Thread interrompida: " + e.getMessage());
-                        }
-                        allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
-                    }
-                }
-                else {
-                    isFreeing = true;
-                    System.out.println("\nmemoria insuficiente! liberando...");
-                    if (count.get() != 0) {
-                        //espera threads à frente
-                        try {
-                            toMonitor.wait();//ultimo monitor adormecido
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            System.err.println("Thread interrompida: " + e.getMessage());
-                        }
-                    }
-                    freeOldestRequests();
-                    allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
-                    if (allocatedFrames == null) {
-                        throw new RuntimeException("falha ao alocar mesmo após liberar espaço na memória.");//custom
-                    }
-                    isFreeing = false;
-                    //acorda os esperantes de free
-                    toMonitor.notifyAll();
-                }
-            }
-
-
-            count.incrementAndGet();
-            mapPages(request, allocatedFrames);//encontra pages livres e faz mapeamento com os frames livres
-            physicalMemory.writeToHeap(request.getVariableId(), allocatedFrames, sizeInt, pageTable.getPageSizeInt());//escreve nos frames encontrados
-            readyQueue.add(request);
-
-            logAllocationRequest(request, sizeInt, pagesNeeded, pageTable.getPageSizeInt());
-            physicalMemory.printHeap();
-            //System.out.print("\n");
-            pageTable.printPageTable();
-
-            count.decrementAndGet();
-            if (count.get() == 0) {
-                //acorda o ultimo monitor adormecido
-                toMonitor.notifyAll();
-            }
-        }
-    }*/
 
 
     public void allocateVariable(Request request) {//Long-Term Scheduler
@@ -183,7 +116,7 @@ public class MemoryManager {
             allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);//para threads que chegam depois (liberadas)
 
             if (allocatedFrames == null) {
-                System.out.println("\nmemoria insuficiente! liberando...");
+                //System.out.println("\nmemoria insuficiente! liberando...");
                 freeOldestRequests();
                 allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
                 if (allocatedFrames == null) {
@@ -220,7 +153,7 @@ public class MemoryManager {
         int[] freePages = pageTable.findFreeVirtualPages(allocatedFrames.length);
 
         for (int i = 0; i < allocatedFrames.length; i++) {
-            System.out.println(freePages[i] + " <- paginas livres encontradas para mapear\n");
+            //System.out.println(freePages[i] + " <- paginas livres encontradas para mapear\n");
             pageTable.map(freePages[i], allocatedFrames[i]);//listas, paginas e frames, utilizados pela requisição
         }
 
@@ -230,11 +163,20 @@ public class MemoryManager {
 
 
     public void loadRequestsFromFile(String filePath) {
-        try (BufferedReader reader = new BufferedReader( new FileReader(filePath) )) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            /*String firstLine = reader.readLine();
+            if (firstLine != null) {
+                String[] header = firstLine.trim().split(",");
+                if (header.length == 3) {
+                    quantity = Integer.parseInt(header[0].trim());
+                    minSize = Integer.parseInt(header[1].trim());
+                    maxSize = Integer.parseInt(header[2].trim());
+                }
+            }*/
+
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
-
                 if (!line.isEmpty()) {
                     String[] partes = line.split(",");
                     if (partes.length == 2) {
@@ -245,10 +187,12 @@ public class MemoryManager {
                     }
                 }
             }
+
         } catch (IOException e) {
             System.err.println("error: " + e.getMessage());
         }
     }
+
 
 
     public static void main(String[] args) {
@@ -280,12 +224,18 @@ public class MemoryManager {
                     runComparison(simulator);
                     break;
                 case 5:
+                    runSequentialRandom(simulator);
+                    break;
+                case 6:
+                    runParallelRandom(simulator);
+                    break;
+                case 7:
                     System.out.println("Saindo...");
                     break;
                 default:
                     System.out.println("Opção inválida. Tente novamente.");
             }
-        } while (option != 5);
+        } while (option != 7);
         scanner.close();
     }
 
@@ -296,7 +246,9 @@ public class MemoryManager {
         System.out.println("2. Executar modo sequencial");
         System.out.println("3. Executar modo paralelo");
         System.out.println("4. Comparar sequencial vs paralelo e exportar gráfico");
-        System.out.println("5. Sair");
+        System.out.println("5. Executar modo sequencial random");
+        System.out.println("6. Executar modo paralelo random");
+        System.out.println("7. Sair");
     }
 
     private static MemoryManager configureParameters() {
@@ -334,7 +286,7 @@ public class MemoryManager {
         System.out.printf("Tempo Sequencial: %.2f ms\n", runtimeMS);
         System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
         //System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
-        //double AverageRequestSizeB = (double) TotalSizeB / quantity; pegar ambas do file
+        //double AverageRequestSizeB = (double) TotalSizeB / quantity;
         //System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
         simulator.reset();
         return runtimeMS;
@@ -347,8 +299,9 @@ public class MemoryManager {
             simulator.allocateVariable( simulator.requestGenerator.generateRequest() );
         }
         long endTime = System.nanoTime();
-        double runtimeMS = (endTime - startTime) / 1_000_000.0;
+        simulator.producerConsumer.shutdownThreads();
 
+        double runtimeMS = (endTime - startTime) / 1_000_000.0;
         System.out.printf("Tempo Sequencial: %.2f ms\n", runtimeMS);
         System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
         System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
@@ -358,6 +311,24 @@ public class MemoryManager {
         return runtimeMS;
     }
 
+    private static double runParallelRandom(MemoryManager simulator) {
+        System.out.println("\n-- Execução Paralela Random--");
+
+        long startTime = System.nanoTime();
+        simulator.producerConsumer.randomProducer(quantity, requestGenerator);
+        simulator.producerConsumer.consumer(simulator);
+        long endTime = System.nanoTime();
+        simulator.producerConsumer.shutdownThreads();
+
+        double runtimeMS = (endTime - startTime) / 1_000_000.0;
+        System.out.printf("Tempo Paralelo: %.2f ms\n", runtimeMS);
+        System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
+        System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
+        //double AverageRequestSizeB = (double) TotalSizeB / quantity;
+        //System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
+        simulator.reset();
+        return runtimeMS;
+    }
 
     private static double runParallelFile(MemoryManager simulator) {
         System.out.println("\n-- Execução Paralela --");
@@ -366,9 +337,11 @@ public class MemoryManager {
         simulator.producerConsumer.readerProducer("C:\\dev\\requests_converted.txt");
         simulator.producerConsumer.consumer(simulator);
         long endTime = System.nanoTime();
+        simulator.producerConsumer.shutdownThreads();
 
         double runtimeMS = (endTime - startTime) / 1_000_000.0;
         System.out.printf("Tempo Paralelo: %.2f ms\n", runtimeMS);
+
         System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
         //System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
         //double AverageRequestSizeB = (double) TotalSizeB / quantity; pegar ambas do file
@@ -395,7 +368,7 @@ public class MemoryManager {
     public void reset() {
         readyQueue.clear();
         totalFreedRequests = 0;
-        totalCallsToFreeOldest = 0;
+        //totalCallsToFreeOldest = 0;
 
         physicalMemory.reset();//
         pageTable.reset();///
