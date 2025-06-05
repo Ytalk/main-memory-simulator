@@ -11,11 +11,14 @@ import MMS.process.RequestGenerator;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Scanner;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.Condition;
+import java.util.stream.Collectors;
 
 public class MemoryManager {
     private final PhysicalMemory physicalMemory;
@@ -37,7 +40,6 @@ public class MemoryManager {
     private static int quantity;
     private static int minSize;
     private static int maxSize;
-    private static String outputPath = "chart.png";
 
     private MemoryManager(PhysicalMemory physicalMemory, PageTable PageTable,
                           RequestGenerator requestGenerator) {
@@ -75,7 +77,7 @@ public class MemoryManager {
 
     public void freeOldestRequests() {//Medium-Term Scheduler
         //aproximadamente 30% do tamanho total da heap (de acordo com o número de frames)
-        int targetFreed = (int) Math.ceil(physicalMemory.getNumFrames() * 0.3);
+        int targetFreed = (int) Math.ceil(physicalMemory.getNumFrames() * 0.6);
         //System.out.println("precisa liberar pelo menos " + targetFreed + " frames (30% da heap)");
 
         //totalCallsToFreeOldest++;
@@ -130,7 +132,6 @@ public class MemoryManager {
             lockForFreeding.release();
         }
         finishAllocation(request, sizeInt, pagesNeeded, allocatedFrames);
-
     }
 
 
@@ -151,9 +152,9 @@ public class MemoryManager {
     //atualiza pageTable (mapeia páginas -> frames)
     private void mapPages(Request request, int[] allocatedFrames) {
         int[] freePages = pageTable.findFreeVirtualPages(allocatedFrames.length);
+        //System.out.println( Arrays.stream(freePages).boxed().collect(Collectors.toList()) + " <- paginas livres encontradas para mapear\n" );
 
         for (int i = 0; i < allocatedFrames.length; i++) {
-            //System.out.println(freePages[i] + " <- paginas livres encontradas para mapear\n");
             pageTable.map(freePages[i], allocatedFrames[i]);//listas, paginas e frames, utilizados pela requisição
         }
 
@@ -305,8 +306,8 @@ public class MemoryManager {
         System.out.printf("Tempo Sequencial: %.2f ms\n", runtimeMS);
         System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
         System.out.println("\nnumero total de requisiçoes atendidas: " + quantity);
-        double AverageRequestSizeB = (double) simulator.requestGenerator.getTotalRandomSizeB() / quantity;
-        System.out.println("tamanho medio das variaveis alocadas em bytes: " + AverageRequestSizeB );
+        double meanRequestsSizeB = (double) simulator.requestGenerator.getTotalRandomSizeB() / quantity;
+        System.out.println("tamanho medio das variaveis alocadas em bytes: " + meanRequestsSizeB );
         simulator.reset();
         return runtimeMS;
     }
@@ -316,7 +317,7 @@ public class MemoryManager {
 
         long startTime = System.nanoTime();
         simulator.producerConsumer.randomProducer(quantity, requestGenerator);
-        simulator.producerConsumer.consumer(simulator);
+        //simulator.producerConsumer.consumer(simulator);
         long endTime = System.nanoTime();
         simulator.producerConsumer.shutdownThreads();
 
@@ -333,12 +334,20 @@ public class MemoryManager {
     private static double runParallelFile(MemoryManager simulator) {
         System.out.println("\n-- Execução Paralela --");
 
-        long startTime = System.nanoTime();
-        simulator.producerConsumer.readerProducer("C:\\dev\\requests_converted.txt");
-        simulator.producerConsumer.consumer(simulator);
-        long endTime = System.nanoTime();
-        simulator.producerConsumer.shutdownThreads();
+        CountDownLatch latch = new CountDownLatch(1 + simulator.producerConsumer.getNumThreads());
 
+        simulator.producerConsumer.readerProducer("C:\\dev\\requests_converted.txt", latch);
+        simulator.producerConsumer.consumer(simulator, latch);
+        long startTime = System.nanoTime();
+
+        try {
+            latch.await();//espera terminarem
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        long endTime = System.nanoTime();
+
+        simulator.producerConsumer.shutdownThreads();
         double runtimeMS = (endTime - startTime) / 1_000_000.0;
         System.out.printf("Tempo Paralelo: %.2f ms\n", runtimeMS);
 
@@ -353,13 +362,25 @@ public class MemoryManager {
 
     private static void runComparison(MemoryManager simulator) {
         System.out.println("\n-- Comparação e Exportação de Gráfico --");
+        int executions = 10;
+        double[] seqTimes = new double[executions];
+        double[] parTimes = new double[executions];
 
-        double seqTime = runSequentialFile(simulator);
-        double parTime = runParallelFile(simulator);
+        for(int x = 0; x < executions; x++){
+            System.out.println("\nexecução " + x);
+            seqTimes[x] = runSequentialFile(simulator);
+            parTimes[x] = runParallelFile(simulator);
+        }
 
-        System.out.printf("Sequencial: %.2f ms | Paralelo: %.2f ms\n", seqTime, parTime);
+        double seqMeanTime = Arrays.stream(seqTimes).average().orElse(0);
+        double parMeanTime = Arrays.stream(parTimes).average().orElse(0);
+        //seqMeanTime /= executions;
+        //parMeanTime /= executions;
+
+        System.out.printf("Sequencial: %.2f ms | Paralelo: %.2f ms\n", seqMeanTime, parMeanTime);
         try {
-            PerformanceChartGenerator.exportComparisonChart(seqTime, parTime, outputPath);
+            PerformanceChartGenerator.exportComparisonChart(seqMeanTime, parMeanTime, "bar.png");
+            PerformanceChartGenerator.exportBoxPlot(seqTimes, parTimes, "boxplot.png");
         } catch (IOException e) {
             System.err.println("Erro ao exportar gráfico: " + e.getMessage());
         }

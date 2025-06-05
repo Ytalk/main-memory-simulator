@@ -6,10 +6,11 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.CountDownLatch;
 
 public class RequestProducerConsumer {
     private BlockingQueue<Request> jobQueue;//buffer
@@ -19,6 +20,10 @@ public class RequestProducerConsumer {
 
     public RequestProducerConsumer() {
         init();
+    }
+
+    public int getNumThreads(){
+        return numThreads;
     }
 
     private void init() {
@@ -53,7 +58,7 @@ public class RequestProducerConsumer {
         }
     }
 
-    public void readerProducer(String filePath) {
+    public void readerProducer(String filePath, CountDownLatch latch) {
         exec.submit(() -> {
             try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
                 /*String firstLine = reader.readLine();
@@ -83,6 +88,7 @@ public class RequestProducerConsumer {
                 e.printStackTrace();
             } finally {//sempre entra em finally para sinalizar fim, inserindo poison pills
                 addPoisonPills();
+                latch.countDown();
             }
         });
     }
@@ -120,7 +126,7 @@ public class RequestProducerConsumer {
     }
 
 
-    public void consumer(MemoryManager simulator) {
+    public void consumer(MemoryManager simulator, CountDownLatch latch) {
         for (int i = 0; i < numThreads; i++) {
             exec.submit(() -> {
                 try {
@@ -131,6 +137,8 @@ public class RequestProducerConsumer {
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                } finally {
+                    latch.countDown();//sinaliza termino
                 }
             });
         }
