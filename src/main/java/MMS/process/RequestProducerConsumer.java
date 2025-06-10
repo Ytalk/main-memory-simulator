@@ -26,7 +26,7 @@ public class RequestProducerConsumer {
         return numThreads;
     }
 
-    private void init() {
+    public void init() {
         numThreads = Runtime.getRuntime().availableProcessors();
         exec = Executors.newFixedThreadPool(numThreads);
         jobQueue = new LinkedBlockingQueue<>();
@@ -43,9 +43,6 @@ public class RequestProducerConsumer {
         }
     }
 
-    public void reset() {
-        init();
-    }
 
     //indica aos consumidores que o produtor terminou. quando um consumidor (thread) pega uma poison pill, ele encerra sua execução
     private void addPoisonPills() {

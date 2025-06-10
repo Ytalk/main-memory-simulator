@@ -11,7 +11,6 @@ import org.jfree.chart.renderer.category.BoxAndWhiskerRenderer;
 import org.jfree.chart.title.LegendTitle;
 import org.jfree.chart.ui.HorizontalAlignment;
 import org.jfree.chart.ui.RectangleEdge;
-import org.jfree.chart.ui.VerticalAlignment;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.statistics.DefaultBoxAndWhiskerCategoryDataset;
 
@@ -26,7 +25,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 //por alocação: Histograma (frag interna), Line Chart/Time Series(ocupação do heap), Pie Chart (páginas livres vs. usadas), Gantt Chart (latência de alocação)
-public class PerformanceChartGenerator {
+public class PerformanceChartExporter {
 
     public static void exportComparisonChart(double seqTime, double parTime, String outputPath) throws IOException {
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
