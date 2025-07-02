@@ -17,8 +17,6 @@ public class PhysicalMemory {
     private final int heapSizeInt;
 
     private final ConcurrentLinkedQueue<Integer> freeFramesQueue = new ConcurrentLinkedQueue<>();
-    //private final Striped<Lock> frameLocks;
-    //private Lock lock = new ReentrantLock();
 
     public PhysicalMemory(int heapSizeKB, int frameSizeB) {//heap e page
         this.heapSizeKB = heapSizeKB;

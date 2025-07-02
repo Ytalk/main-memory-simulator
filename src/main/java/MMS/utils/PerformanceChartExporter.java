@@ -1,4 +1,4 @@
-package MMS;
+package MMS.utils;
 
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartUtils;
@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 //por alocação: Histograma (frag interna), Line Chart/Time Series(ocupação do heap), Pie Chart (páginas livres vs. usadas), Gantt Chart (latência de alocação)
 public class PerformanceChartExporter {
 
-    public static void exportComparisonChart(double seqTime, double parTime, String outputPath) throws IOException {
+    public static void exportBarChart(double seqTime, double parTime, String outputPath) throws IOException {
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
         //dataset.addValue(seqTime, "Tempo (ms)", "Sequencial");
         //dataset.addValue(parTime, "Tempo (ms)", "Paralelo");

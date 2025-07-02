@@ -1,15 +1,14 @@
-package MMS;
+package MMS.utils;
 
 import java.util.Scanner;
 
 public class ConsoleUI {
     private Scanner scanner = new Scanner(System.in);
-
     private int heapSizeKB;
     private int pageSizeB;
     private int quantity;
-    private int minSize;
-    private int maxSize;
+    private int minSizeB;
+    private int maxSizeB;
 
     public void showMenu() {
         System.out.println("\n=== Menu do MemoryManager ===");
@@ -26,8 +25,8 @@ public class ConsoleUI {
         heapSizeKB = readInt("Tamanho da Heap (KB): ");
         pageSizeB = readInt("Tamanho da Página (Bytes): ");
         quantity = readInt("Quantidade de requests: ");
-        minSize = readInt("Tamanho mínimo das requests (Bytes): ");
-        maxSize = readInt("Tamanho máximo das requests (Bytes): ");
+        minSizeB = readInt("Tamanho mínimo das requests (Bytes): ");
+        maxSizeB = readInt("Tamanho máximo das requests (Bytes): ");
     }
 
     public int readInt(String prompt) {
@@ -48,17 +47,25 @@ public class ConsoleUI {
     public int getHeapSizeKB() {
         return heapSizeKB;
     }
+
     public int getPageSizeB() {
         return pageSizeB;
     }
+
     public int getQuantity() {
         return quantity;
     }
+
     public int getMinSize() {
-        return minSize;
+        return minSizeB;
     }
+
     public int getMaxSize() {
-        return maxSize;
+        return maxSizeB;
+    }
+
+    public void setQuantity(int quantityInFile){
+        quantity = quantityInFile;
     }
 
 }

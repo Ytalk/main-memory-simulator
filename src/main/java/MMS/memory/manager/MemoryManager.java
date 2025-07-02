@@ -1,7 +1,7 @@
 package MMS.memory.manager;
 
-import MMS.ConsoleUI;
-import MMS.Scheduler;
+import MMS.utils.ConsoleUI;
+import MMS.utils.TimingRuns;
 import MMS.memory.physical.PhysicalMemory;
 import MMS.memory.virtual.PageTable;
 
@@ -14,6 +14,7 @@ import java.io.IOException;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MemoryManager {
     private final PhysicalMemory physicalMemory;
@@ -21,14 +22,15 @@ public class MemoryManager {
     private static RequestGenerator requestGenerator;
 
     private static ConsoleUI console = new ConsoleUI();
-    private static Scheduler scheduler = new Scheduler();
+    private static TimingRuns timing = new TimingRuns();
 
     private final ConcurrentLinkedQueue<Request> readyQueue = new ConcurrentLinkedQueue();
-    private final Semaphore lockForFreeding = new Semaphore(1);
-    private final Object toMonitor = new Object();
+    private final Semaphore lockForReplacement = new Semaphore(1);
 
     private static int totalFreedRequests = 0;
     private static int totalCallsToFreeOldest = 0;
+    private final AtomicInteger totalFragmentedInt = new AtomicInteger(0);
+    private static double meanRequestsSizeB = 0;
 
 
     private MemoryManager(PhysicalMemory physicalMemory, PageTable PageTable, RequestGenerator requestGenerator) {
@@ -74,6 +76,9 @@ public class MemoryManager {
         int sizeInt = (request.getSizeB() + Integer.BYTES - 1) / Integer.BYTES;
         int pagesNeeded = (sizeInt + pageTable.getPageSizeInt() - 1) / pageTable.getPageSizeInt();
 
+        int fragmentedInt = ( pagesNeeded * pageTable.getPageSizeInt() ) - sizeInt;
+        totalFragmentedInt.addAndGet(fragmentedInt);
+
         int[] allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);
         //happy flow - há espaço na mem (não deve executar junto com freeOldestRequests)
         if (allocatedFrames != null) {
@@ -83,7 +88,7 @@ public class MemoryManager {
 
         //bad flow - não houve espaço, freeOldestRequests [seção crítica], será acionado pelo menos 1 vez
         try {
-            lockForFreeding.acquire();
+            lockForReplacement.acquire();
             allocatedFrames = physicalMemory.findFreePhysicalFrames(pagesNeeded);//para threads que chegam depois (liberadas)
 
             if (allocatedFrames == null) {
@@ -98,7 +103,7 @@ public class MemoryManager {
             Thread.currentThread().interrupt();
             System.err.println("Thread interrompida: " + e.getMessage());
         } finally {
-            lockForFreeding.release();
+            lockForReplacement.release();
         }
         finishAllocation(request, sizeInt, pagesNeeded, allocatedFrames);
     }
@@ -109,12 +114,12 @@ public class MemoryManager {
         physicalMemory.writeToHeap(request.getVariableId(), frames, sizeInt);
         readyQueue.add(request);
 
-        synchronized (toMonitor) {
+        /*synchronized (toMonitor) {
             logAllocationRequest(request, sizeInt, pagesNeeded, pageTable.getPageSizeInt());
             physicalMemory.printHeap();
             System.out.println();
             pageTable.printPageTable();
-        }
+        }*/
     }
 
 
@@ -134,15 +139,14 @@ public class MemoryManager {
 
     public void loadRequestsFromFile(String filePath) {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-            /*String firstLine = reader.readLine();
+            String firstLine = reader.readLine();
             if (firstLine != null) {
                 String[] header = firstLine.trim().split(",");
-                if (header.length == 3) {
-                    quantity = Integer.parseInt(header[0].trim());
-                    minSize = Integer.parseInt(header[1].trim());
-                    maxSize = Integer.parseInt(header[2].trim());
+                if (header.length == 2) {
+                    console.setQuantity( Integer.parseInt(header[0].trim()) );
+                    meanRequestsSizeB = Double.parseDouble(header[1].trim());
                 }
-            }*/
+            }
 
             String line;
             while ((line = reader.readLine()) != null) {
@@ -195,21 +199,19 @@ public class MemoryManager {
                     simulator = new MemoryManager(physicalMemory, pageTable, requestGenerator);
                     break;
                 case 2:
-                    scheduler.runSequentialFile(simulator);
+                    timing.runSequentialFile(simulator);
                     break;
                 case 3:
-                    scheduler.runParallelFile(simulator);
+                    timing.runParallelFile(simulator);
                     break;
                 case 4:
-                    scheduler.runComparison(simulator);
+                    timing.runComparison(simulator);
                     break;
                 case 5:
-                    scheduler.runSequentialRandom(simulator);
+                    timing.runSequentialRandom(simulator);
                     break;
                 case 6:
-                    scheduler.runParallelRandom(simulator);
-                    simulator.report();
-                    simulator.reset();
+                    timing.runParallelRandom(simulator);
                     break;
                 case 7:
                     System.out.println("Saindo...");
@@ -225,23 +227,36 @@ public class MemoryManager {
     public void report() {
         System.out.println("numero total de variaveis removidas da heap: " + totalFreedRequests);
         System.out.println("\nnumero total de requisiçoes atendidas: " + console.getQuantity());
-        //double meanRequestsSizeB = (double) simulator.requestGenerator.getTotalRandomSizeB() / quantity;//alternativas
-        //System.out.println("tamanho medio das variaveis alocadas em bytes: " + meanRequestsSizeB );
+        System.out.println("tamanho medio das variaveis alocadas em bytes: " + meanRequestsSizeB );
+        System.out.println("total de fragmentação interna ocorrida na heap (int): " + totalFragmentedInt);
     }
 
     public void reset() {
         readyQueue.clear();
         totalFreedRequests = 0;
         //totalCallsToFreeOldest = 0;
+        totalFragmentedInt.set(0);
 
         physicalMemory.reset();//
         pageTable.reset();///
         requestGenerator.reset();
-        scheduler.reset();
+        timing.reset();
     }
 
     public static int getQuantity() {
         return console.getQuantity();
+    }
+
+    public ConsoleUI getConsole(){
+        return console;
+    }
+
+    public void setMeanRequestsSizeB(double mean){
+        meanRequestsSizeB = mean;
+    }
+
+    public void updateMeanRequestsSizeB(){
+        meanRequestsSizeB = (double) requestGenerator.getTotalRandomSizeB() / console.getQuantity();
     }
 
     public static RequestGenerator getRequestGenerator() {

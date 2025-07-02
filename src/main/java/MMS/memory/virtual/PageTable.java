@@ -104,6 +104,10 @@ public class PageTable {
         return pageSizeInt;
     }
 
+    public int getPageSizeB(){
+        return pageSizeB;
+    }
+
     public void printPageTable() {
         for (int i = 0; i < numPages; i++) {
             System.out.println("index(page): " + i + " value(frame/-1 se nao mapeado): " + entries[i].getPhysicalFrame());

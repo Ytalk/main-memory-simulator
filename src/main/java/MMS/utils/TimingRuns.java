@@ -1,24 +1,23 @@
-package MMS;
+package MMS.utils;
 
 import MMS.memory.manager.MemoryManager;
-import MMS.process.RequestProducerConsumer;
+import MMS.concurrency.RequestProducerConsumer;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
-public class Scheduler {
+public class TimingRuns {
     private final RequestProducerConsumer producerConsumer = new RequestProducerConsumer();
 
     public double runSequentialFile(MemoryManager simulator) {
         System.out.println("\n-- Execução Sequencial (file) --");
         long startTime = System.nanoTime();
-        simulator.loadRequestsFromFile("C:\\dev\\requests_converted.txt");
+        simulator.loadRequestsFromFile("src/main/resources/requests-files/requests_10000.txt");
         long endTime = System.nanoTime();
-        double runtimeMS = (endTime - startTime) / 1_000_000.0;
 
+        double runtimeMS = (endTime - startTime) / 1_000_000.0;
         System.out.printf("Tempo Sequencial (file): %.2f ms\n", runtimeMS);
-        //tava aqui
         simulator.report();
         simulator.reset();
         return runtimeMS;
@@ -34,7 +33,7 @@ public class Scheduler {
 
         double runtimeMS = (endTime - startTime) / 1_000_000.0;
         System.out.printf("Tempo Sequencial (random): %.2f ms\n", runtimeMS);
-        //tava aqui
+        simulator.updateMeanRequestsSizeB();
         simulator.report();
         simulator.reset();
         return runtimeMS;
@@ -43,16 +42,22 @@ public class Scheduler {
 
     public double runParallelRandom(MemoryManager simulator) {
         System.out.println("\n-- Execução Paralela (random) --");
+        CountDownLatch latch = new CountDownLatch(1 + producerConsumer.getNumThreads());
+        producerConsumer.randomProducer(simulator.getQuantity(), simulator.getRequestGenerator(), latch);
+        producerConsumer.consumer(simulator, latch);
 
         long startTime = System.nanoTime();
-        producerConsumer.randomProducer(simulator.getQuantity(), simulator.getRequestGenerator());
-        //simulator.producerConsumer.consumer(simulator);
+        try {
+            latch.await();//espera terminarem
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         long endTime = System.nanoTime();
-        producerConsumer.shutdownThreads();
 
+        producerConsumer.shutdownThreads();
         double runtimeMS = (endTime - startTime) / 1_000_000.0;
         System.out.printf("Tempo Paralelo (random): %.2f ms\n", runtimeMS);
-        //tava aqui
+        simulator.updateMeanRequestsSizeB();
         simulator.report();
         simulator.reset();
         return runtimeMS;
@@ -60,13 +65,11 @@ public class Scheduler {
 
     public double runParallelFile(MemoryManager simulator) {
         System.out.println("\n-- Execução Paralela (file) --");
-
         CountDownLatch latch = new CountDownLatch(1 + producerConsumer.getNumThreads());
-
-        producerConsumer.readerProducer("C:\\dev\\requests_converted.txt", latch);
+        producerConsumer.readerProducer("src/main/resources/requests-files/requests_10000.txt", latch, simulator);
         producerConsumer.consumer(simulator, latch);
-        long startTime = System.nanoTime();
 
+        long startTime = System.nanoTime();
         try {
             latch.await();//espera terminarem
         } catch (InterruptedException e) {
@@ -77,7 +80,8 @@ public class Scheduler {
         producerConsumer.shutdownThreads();
         double runtimeMS = (endTime - startTime) / 1_000_000.0;
         System.out.printf("Tempo Paralelo (file): %.2f ms\n", runtimeMS);
-        //tava aqui
+        simulator.report();
+        simulator.reset();
         return runtimeMS;
     }
 
@@ -99,7 +103,7 @@ public class Scheduler {
 
         System.out.printf("Sequencial: %.2f ms | Paralelo: %.2f ms\n", seqMeanTime, parMeanTime);
         try {
-            PerformanceChartExporter.exportComparisonChart(seqMeanTime, parMeanTime, "bar.png");
+            PerformanceChartExporter.exportBarChart(seqMeanTime, parMeanTime, "bar.png");
             PerformanceChartExporter.exportBoxPlot(seqTimes, parTimes, "boxplot.png");
             System.out.println("Gráficos exportados com sucesso: bar.png e boxplot.png");
         } catch (IOException e) {

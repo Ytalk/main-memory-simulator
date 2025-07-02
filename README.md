@@ -1,6 +1,14 @@
 ## 💾 About
 
-**MMS** is a dynamic memory manager with page-based memory management that works in concurrent/parallel (using the Producer-Consumer pattern) mode, developed as a project for the Operating Systems course.
+**MMS** is a software simulates dynamic memory management using the page-based scheme (paging) with FIFO page replacement. It operates in concurrent/parallel mode based on the Producer–Consumer problem. Developed as a project for the Operating Systems course, it aims to explore memory management concepts and to simulate various workloads in order to analyze their impact on performance (execution time and memory usage).
+
+<div align="center">
+
+### Class Diagram
+
+</div>
+
+  ![Memory Manager Class Diagram](src/main/resources/documentation/DynamicMemoryManagement.png)
 
 ## 🏗️ Project Structure
 
@@ -22,7 +30,7 @@ MMS/
 └── PerformanceChartGenerator.java
 ```
 
-## 🔨 Tools
+## ⚙️ Technologies
 
 - [Java](https://docs.oracle.com/en/java/)
 - [Maven](https://maven.apache.org)
@@ -30,7 +38,7 @@ MMS/
 
 ## 📄 Dependencies
 
-- [`Java JDK`](https://www.oracle.com/java/technologies/downloads/) (mandatory)
+- [`Java JDK`](https://www.oracle.com/java/technologies/downloads/) (requires Java 8 or higher)
 
 ## 🚀 How to Run
 

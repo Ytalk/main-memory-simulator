@@ -1,6 +1,8 @@
-package MMS.process;
+package MMS.concurrency;
 
 import MMS.memory.manager.MemoryManager;
+import MMS.process.Request;
+import MMS.process.RequestGenerator;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -27,7 +29,7 @@ public class RequestProducerConsumer {
     }
 
     public void init() {
-        numThreads = Runtime.getRuntime().availableProcessors();
+        numThreads = Runtime.getRuntime().availableProcessors() * 2;//x threads por processador
         exec = Executors.newFixedThreadPool(numThreads);
         jobQueue = new LinkedBlockingQueue<>();
     }
@@ -55,18 +57,18 @@ public class RequestProducerConsumer {
         }
     }
 
-    public void readerProducer(String filePath, CountDownLatch latch) {
+    public void readerProducer(String filePath, CountDownLatch latch, MemoryManager simulator) {
         exec.submit(() -> {
             try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
-                /*String firstLine = reader.readLine();
+
+                String firstLine = reader.readLine();
                 if (firstLine != null) {
                     String[] header = firstLine.trim().split(",");
-                    if (header.length == 3) {
-                        int totalRequests = Integer.parseInt(header[0].trim());
-                        int minSize = Integer.parseInt(header[1].trim());
-                        int maxSize = Integer.parseInt(header[2].trim());
+                    if (header.length == 2) {
+                        simulator.getConsole().setQuantity( Integer.parseInt(header[0].trim()) );
+                        simulator.setMeanRequestsSizeB( Double.parseDouble(header[1].trim()) );
                     }
-                }*/
+                }
 
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -90,7 +92,7 @@ public class RequestProducerConsumer {
         });
     }
 
-    public void randomProducer(int quantity, RequestGenerator generator) {
+    public void randomProducer(int quantity, RequestGenerator generator, CountDownLatch latch) {
         exec.submit(() -> {
             try {
                 for (int x = 0; x < quantity; x++) {
@@ -99,8 +101,9 @@ public class RequestProducerConsumer {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 System.err.println("Thread interrompida: " + e.getMessage());
-            } finally {//sempre entra em finally para sinalizar fim, inserindo poison pills
+            } finally {
                 addPoisonPills();
+                latch.countDown();
             }
         });
     }
