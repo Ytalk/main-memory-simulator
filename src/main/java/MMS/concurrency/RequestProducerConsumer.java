@@ -7,6 +7,8 @@ import MMS.process.RequestGenerator;
 import java.io.BufferedReader;
 import java.io.FileReader;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,41 +18,54 @@ import java.util.concurrent.CountDownLatch;
 
 public class RequestProducerConsumer {
     private BlockingQueue<Request> jobQueue;//buffer
-    private int numThreads;
-    private ExecutorService exec;
-    //private final ExecutorService exec = Executors.newWorkStealingPool();
+    private int numConsumers;
+    private ExecutorService consumerExec;
+    private ExecutorService producerExec;
+    private static final Request POISON_PILL = new Request(-1, -1);
 
     public RequestProducerConsumer() {
         init();
     }
 
-    public int getNumThreads(){
-        return numThreads;
+    public int getNumConsumers(){
+        return numConsumers;
     }
 
     public void init() {
-        numThreads = Runtime.getRuntime().availableProcessors() * 2;//x threads por processador
-        exec = Executors.newFixedThreadPool(numThreads);
+        numConsumers = Runtime.getRuntime().availableProcessors() + 1;//threads em relação ao processador
+        producerExec = Executors.newSingleThreadExecutor();
+        consumerExec = Executors.newFixedThreadPool(numConsumers);
         jobQueue = new LinkedBlockingQueue<>();
     }
 
     public void shutdownThreads() {
-        exec.shutdown();
+        producerExec.shutdown();
         try {
-            if (!exec.awaitTermination(5, TimeUnit.SECONDS)) {
-                exec.shutdownNow();
+            if (!producerExec.awaitTermination(5, TimeUnit.SECONDS)) {
+                producerExec.shutdownNow();
             }
         } catch (InterruptedException e) {
-            exec.shutdownNow();
+            producerExec.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
+        consumerExec.shutdown();
+        try {
+            if (!consumerExec.awaitTermination(5, TimeUnit.SECONDS)) {
+                consumerExec.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            consumerExec.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 
 
     //indica aos consumidores que o produtor terminou. quando um consumidor (thread) pega uma poison pill, ele encerra sua execução
     private void addPoisonPills() {
-        for (int i = 0; i < numThreads; i++) {
+        for (int i = 0; i < numConsumers; i++) {
             try {
-                jobQueue.put(new Request(-1, -1));
+                jobQueue.put(POISON_PILL);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -58,30 +73,27 @@ public class RequestProducerConsumer {
     }
 
     public void readerProducer(String filePath, CountDownLatch latch, MemoryManager simulator) {
-        exec.submit(() -> {
-            try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+        Path path = Paths.get(filePath);
+        producerExec.submit(() -> {
+            try (BufferedReader reader = new BufferedReader( new FileReader(path.toFile()) )) {
 
-                String firstLine = reader.readLine();
-                if (firstLine != null) {
-                    String[] header = firstLine.trim().split(",");
-                    if (header.length == 2) {
-                        simulator.getConsole().setQuantity( Integer.parseInt(header[0].trim()) );
-                        simulator.setMeanRequestsSizeB( Double.parseDouble(header[1].trim()) );
-                    }
+                String header  = reader.readLine();
+                if (header  != null) {
+                    int comma = header.indexOf(',');
+                    simulator.getConsole().setQuantity( Integer.parseInt( header.substring(0, comma).trim()) );
+                    simulator.setMeanRequestsSizeB(Double.parseDouble( header.substring(comma + 1).trim()) );
                 }
 
                 String line;
                 while ((line = reader.readLine()) != null) {
                     line = line.trim();
-
                     if (line.isEmpty()) continue;
-                    String[] parts = line.split(",");
-                    if (parts.length >= 2) {
-                        int a = Integer.parseInt(parts[0].trim());
-                        int b = Integer.parseInt(parts[1].trim());
-                        jobQueue.put(new Request(a, b));
-                    }
 
+                    int comma = line.indexOf(',');
+                    int id = Integer.parseInt(line.substring(0, comma));
+                    int size = Integer.parseInt(line.substring(comma + 1).trim());
+
+                    jobQueue.put(new Request(id, size));
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -93,7 +105,7 @@ public class RequestProducerConsumer {
     }
 
     public void randomProducer(int quantity, RequestGenerator generator, CountDownLatch latch) {
-        exec.submit(() -> {
+        producerExec.submit(() -> {
             try {
                 for (int x = 0; x < quantity; x++) {
                     jobQueue.put(generator.generateRequest());
@@ -109,7 +121,7 @@ public class RequestProducerConsumer {
     }
 
     public void testProducer() {
-        exec.submit(() -> {
+        producerExec.submit(() -> {
             try {
                 jobQueue.put(new Request(1, 512));
                 jobQueue.put(new Request(2, 388));
@@ -127,8 +139,8 @@ public class RequestProducerConsumer {
 
 
     public void consumer(MemoryManager simulator, CountDownLatch latch) {
-        for (int i = 0; i < numThreads; i++) {
-            exec.submit(() -> {
+        for (int i = 0; i < numConsumers; i++) {
+            consumerExec.submit(() -> {
                 try {
                     while (true) {
                         Request req = jobQueue.take();

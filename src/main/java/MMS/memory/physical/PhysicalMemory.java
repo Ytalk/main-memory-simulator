@@ -1,7 +1,5 @@
 package MMS.memory.physical;
 
-import com.google.common.util.concurrent.Striped;
-
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -44,23 +42,20 @@ public class PhysicalMemory {
     public int[] findFreePhysicalFrames(int pagesNeeded) {
         int[] freeFramesFound = new int[pagesNeeded];
 
-        //lock.lock();
-        //try {
-            for (int i = 0; i < pagesNeeded; i++) {
-                Integer frame = freeFramesQueue.poll();
+        for (int i = 0; i < pagesNeeded; i++) {
+            Integer frame = freeFramesQueue.poll();
 
-                if (frame == null) {
-                    //rollback dos frames já alocados
-                    for (int j = 0; j < i; j++) {
-                        freeFramesQueue.add(freeFramesFound[j]);
-                    }
-                    return null;
+            if (frame == null) {
+                //rollback dos frames já alocados
+                for (int j = 0; j < i; j++) {
+                    freeFramesQueue.add(freeFramesFound[j]);
                 }
-
-                freeFramesFound[i] = frame;
+                return null;
             }
-            return freeFramesFound;
-        //} finally { lock.unlock(); }
+
+            freeFramesFound[i] = frame;
+        }
+        return freeFramesFound;
     }
 
     //batch write com Arrays
@@ -71,11 +66,8 @@ public class PhysicalMemory {
             int start = frameIndex * frameSizeInt;
             int end = start + toWrite;
 
-            //Lock lock = frameLocks.get(frameIndex);
-            //lock.lock();
-            //try {
-                Arrays.fill(heap, start, end, variableId);
-            //} finally { lock.unlock(); }
+            Arrays.fill(heap, start, end, variableId);
+
             remaining -= toWrite;
         }
     }

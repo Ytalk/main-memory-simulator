@@ -21,6 +21,39 @@ public class ConsoleUI {
         System.out.println("7. Sair");
     }
 
+    private void showMenuOfFiles() {
+        System.out.println("\n=== Escolha o arquivo de requisições ===");
+        System.out.println("1. requests_1000.txt (1000 requisições)");
+        System.out.println("2. requests_10000.txt (10000 requisições)");
+        System.out.println("3. requests_100000.txt (100000 requisições)");
+    }
+
+    public String selectRequestFile() {
+        showMenuOfFiles();
+
+        int fileOption;
+        while (true) {
+            fileOption = readInt("Digite o número do arquivo desejado: ");
+            if (fileOption >= 1 && fileOption <= 3) {
+                break;
+            } else {
+                System.out.println("Opção inválida. Digite 1, 2 ou 3.");
+            }
+            showMenuOfFiles();
+        }
+
+        switch (fileOption) {
+            case 1:
+                return "src/main/resources/requests-files/requests_1000.txt";
+            case 2:
+                return "src/main/resources/requests-files/requests_10000.txt";
+            case 3:
+                return "src/main/resources/requests-files/requests_100000.txt";
+            default:
+                return "";
+        }
+    }
+
     public void configureParameters() {
         heapSizeKB = readInt("Tamanho da Heap (KB): ");
         pageSizeB = readInt("Tamanho da Página (Bytes): ");
