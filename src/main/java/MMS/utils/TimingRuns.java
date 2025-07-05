@@ -88,12 +88,12 @@ public class TimingRuns {
 
     public void runComparison(MemoryManager simulator, String filePath) {
         System.out.println("\n-- Comparação e Exportação de Gráfico --");
-        final int EXECUTIONS = 10;
+        final int EXECUTIONS = 15;
         double[] seqTimes = new double[EXECUTIONS];
         double[] parTimes = new double[EXECUTIONS];
 
         for(int x = 0; x < EXECUTIONS; x++){
-            System.out.println("\nexecução " + x);
+            System.out.println("\nexecução " + (x+1));
             seqTimes[x] = runSequentialFile(simulator, filePath);
             parTimes[x] = runParallelFile(simulator, filePath);
         }
@@ -104,8 +104,9 @@ public class TimingRuns {
         System.out.printf("Sequencial: %.2f ms | Paralelo: %.2f ms\n", seqMeanTime, parMeanTime);
         try {
             PerformanceChartExporter.exportBarChart(seqMeanTime, parMeanTime, "barChart.png");
-            PerformanceChartExporter.exportBoxPlot(seqTimes, parTimes, "boxPlot.png");
-            System.out.println("Gráficos exportados com sucesso: barChart.png e boxPlot.png");
+            PerformanceChartExporter.exportBoxPlot(seqTimes, parTimes, "boxplot.png");
+            PerformanceChartExporter.exportExecutionTimesBarChart(seqTimes, parTimes, "execTimesBarChart.png");
+            System.out.println("Gráficos exportados com sucesso: barChart.png e boxplot.png e execTimesBarChart.png");
         } catch (IOException e) {
             System.err.println("Erro ao exportar gráfico: " + e.getMessage());
             e.printStackTrace();
@@ -114,6 +115,29 @@ public class TimingRuns {
 
     public void reset(){
         producerConsumer.init();
+    }
+
+
+
+    public void runTest(MemoryManager simulator) {
+        System.out.println("\n-- Execução paralela (test) --");
+        CountDownLatch latch = new CountDownLatch(1 + producerConsumer.getNumConsumers());//encerrar produtor + consumidores
+        producerConsumer.testProducer(latch);
+        producerConsumer.consumer(simulator, latch);
+
+        long startTime = System.nanoTime();
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        long endTime = System.nanoTime();
+
+        producerConsumer.shutdownThreads();
+        double runtimeMS = (endTime - startTime) / 1_000_000.0;
+        System.out.printf("Tempo Sequencial (file): %.2f ms\n", runtimeMS);
+        simulator.report();
+        simulator.reset();
     }
 
 }

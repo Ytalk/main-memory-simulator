@@ -12,15 +12,12 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 public class MemoryManager {
     private final PhysicalMemory physicalMemory;
@@ -67,7 +64,7 @@ public class MemoryManager {
 
         //totalCallsToFreeOldest++;
         int freedFrames = 0;
-        while (freedFrames < targetFreed) {//acumula requests até bater o número de frames alvo ou mais (30%+) // && !readyQueue.isEmpty()
+        while (freedFrames < targetFreed && !readyQueue.isEmpty()) {//acumula requests até bater o número de frames alvo ou mais (30%+) //
             Request oldest = readyQueue.poll();
             freedFrames += oldest.getPagesUsedNum();
             totalFreedRequests++;//total de variáveis removidas da heap
@@ -112,7 +109,7 @@ public class MemoryManager {
                 wakeupSemaphore.release(numSleepers);
             }
         } else {
-            // quem não liberou fica esperando
+            //quem não liberou fica esperando
             //waitingThreads.incrementAndGet();
             try {
                 wakeupSemaphore.acquire();
@@ -207,6 +204,7 @@ public class MemoryManager {
                     simulator.allocateVariable( new Request(3, 230) );
                     simulator.allocateVariable( new Request(4, 256) );
                     simulator.allocateVariable( new Request(5, 530) );
+                    simulator.report();
                     simulator.reset();
                     break;
                 case 1:
@@ -236,6 +234,9 @@ public class MemoryManager {
                     break;
                 case 7:
                     System.out.println("Saindo...");
+                    break;
+                case 222:
+                    timing.runTest(simulator);
                     break;
                 default:
                     System.out.println("Opção inválida. Tente novamente.");

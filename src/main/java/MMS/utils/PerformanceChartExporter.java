@@ -35,7 +35,7 @@ public class PerformanceChartExporter {
         dataset.addValue(parTime, "Paralelo", "");
 
         JFreeChart barChart = ChartFactory.createBarChart(
-                "Tempo de Execução: Sequencial VS Paralelo",
+                "Tempo Médio de Execução",
                 "Modo de Execução",
                 "Tempo (ms)",
                 dataset
@@ -58,7 +58,6 @@ public class PerformanceChartExporter {
     }
 
 
-
     public static void exportBoxPlot(double[] seqTimes, double[] parTimes, String outputPath) throws IOException {
         /*DefaultBoxAndWhiskerCategoryDataset dataset = new DefaultBoxAndWhiskerCategoryDataset();
         dataset.add(toList(seqTimes), "Tempo de Execução", "Sequencial");
@@ -69,7 +68,7 @@ public class PerformanceChartExporter {
         dataset.add(toList(parTimes), "Paralelo", "");
 
         JFreeChart boxAndWhiskerChart = ChartFactory.createBoxAndWhiskerChart(
-                "Comparação de Desempenho",
+                "Boxplot de Tempos de Execução",
                 "Modo de Execução",
                 "Tempo (ms)",
                 dataset,
@@ -90,6 +89,39 @@ public class PerformanceChartExporter {
         File boxPlotFile = new File(outputPath);
         ChartUtils.saveChartAsPNG(boxPlotFile, boxAndWhiskerChart, 800, 600);
     }
+
+
+    public static void exportExecutionTimesBarChart(double[] seqTimes, double[] parTimes, String outputPath) throws IOException {
+        DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+
+        for (int i = 0; i < seqTimes.length; i++) {
+            String execLabel = Integer.toString(i + 1);
+            dataset.addValue(seqTimes[i], "Sequencial", execLabel);
+            dataset.addValue(parTimes[i],   "Paralelo",   execLabel);
+        }
+
+        JFreeChart chart = ChartFactory.createBarChart(
+                "Tempos por Execução",
+                "Execução",
+                "Tempo (ms)",
+                dataset
+        );
+        chart.setBackgroundPaint(Color.BLACK);
+
+        CategoryPlot plot = chart.getCategoryPlot();
+        formatPlot(plot);
+
+        formatTitlesAndAxes(chart, plot);
+
+        BarRenderer renderer = (BarRenderer) plot.getRenderer();
+        formatBarRenderer(renderer);
+        //renderer.setMaximumBarWidth(0.1);
+
+        formatLegend(chart);
+
+        ChartUtils.saveChartAsPNG(new File(outputPath), chart, 800, 600);
+    }
+
 
 
 
@@ -124,7 +156,7 @@ public class PerformanceChartExporter {
     private static void formatPlot(CategoryPlot plot) {
         plot.setBackgroundPaint(Color.GRAY);
         plot.setRangeGridlinePaint(Color.WHITE);
-        plot.getDomainAxis().setLowerMargin(0.05);
+        plot.getDomainAxis().setLowerMargin(0.05);//
         plot.getDomainAxis().setUpperMargin(0.05);
         //plot.getDomainAxis().setCategoryMargin(0.1);
         //setItemMargin(double) para mesma categoria(series)

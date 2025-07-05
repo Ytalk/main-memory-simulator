@@ -120,7 +120,7 @@ public class RequestProducerConsumer {
         });
     }
 
-    public void testProducer() {
+    public void testProducer(CountDownLatch latch) {
         producerExec.submit(() -> {
             try {
                 jobQueue.put(new Request(1, 512));
@@ -133,6 +133,7 @@ public class RequestProducerConsumer {
                 System.err.println("Thread interrompida: " + e.getMessage());
             } finally {
                 addPoisonPills();
+                latch.countDown();
             }
         });
     }
